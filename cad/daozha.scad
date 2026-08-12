@@ -147,12 +147,39 @@ SW_HOLE_R  = 12.5;            // 微动开关安装孔半径 (需实物微调)
 SW_SPACING = 9.5;
 MIC_Z      = 38;
 
-MOT_D      = 12.4;
-MOT_GB     = 12.6;            // N20 减速箱方形边长(含间隙)
-MOT_BOSS_D = 16;
-MOT_BOSS_H = 4;
+/* --- N20 减速电机 ---------------------------------------------------
+   通用 N20 微型金属减速电机 (= Pololu micro metal gearmotor 外形)。
+   ⚠ v2.5 之前这里是错的:
+     · 机身按 φ12.4 **圆柱**建模, 但 N20 机身是 10×12 **方形**, 对角线
+       15.6mm, 根本塞不进 φ12.4 的圆槽;
+     · 减速箱按 12.6 方形建模, 实际 10×12, 一个方向松了 2.6mm;
+     · README 让人调的 MOT_TOTAL 参数在源码里根本不存在。
+   ⚠ 收到实物必须卡尺复核, 尤其 MOT_L —— 随减速比在 24~30mm 之间变。      */
+MOT_W    = 10.0;   // 截面宽 (装配 X 向)
+MOT_H    = 12.0;   // 截面高 (装配 Z 向)
+MOT_L    = 26.0;   // 总长(机身+减速箱)。上限 32, 再长顶到 +Y 内壁
+MOT_CLR  = 0.4;    // 电机四周配合间隙
+// 减速箱前端面 Y。下限被凸轮卡住: 凸轮占 y=-19..-13, 电机不能越过 -13
+MOT_Y0   = -12.5;
 
+SHAFT_D    = 3.0;  // D 形轴直径
+SHAFT_FLAT = 2.5;  // D 形轴"对边"尺寸(平面到对侧圆弧) -> 平面距轴心 = 2.5-1.5 = 1.0
+SHAFT_L    = 9.0;  // 轴伸出长度
+SHAFT_CLR  = 0.15; // 轴孔间隙。要传扭矩, 不能用 GAP=0.25 那么松
+
+/* --- 机械止挡 ---
+   不再手摆角度。改用"扫掠差集": 毛坯减去转臂 0..STOP_ANG 扫过的区域,
+   剩下的正好是抬到 STOP_ANG 之前绝不会碰到的料, 闸杆到 STOP_ANG 时与它相切。
+   v2.5 之前是把一个方块转到 100° 摆在半径 9~15 处, 但方块侧面距转轴只有
+   3.5mm 而转臂侧面在 7mm —— 挡块整个埋在转臂扫掠包络里, 实测闸杆抬到
+   35~40° 就撞死, 根本到不了 90°。                                       */
 STOP_ANG   = 100;
+STOP_R0    = 15;   // 止挡毛坯内半径
+// 外半径压在转臂尖端回转半径 √(20²+7²)=21.19 以内。取 22 的话, 21.19~22
+// 那圈料转臂永远够不着, 白留一条又薄又弱的悬边。
+STOP_R1    = 21;
+STOP_SPAN  = 45;   // 毛坯扇形张角
+STOP_OUT   = 9;    // 沿 -Y 伸出长度 (从内壁 y=-21 起算)
 
 // 调试开关: 全部默认 true。-D FEAT=false 只出裸壳; F1~F4 可单独关掉排查
 FEAT = true;
@@ -192,7 +219,13 @@ SLOT_Z0      = (HUB_CLAMP_H - SLOT_H) / 2;// 2.75, 槽在夹持段内居中
 BAR_PIN_X    = 6;                         // 横穿螺丝距杆根 6mm, 与 bar_a 的底孔对齐
 HUB_J_Z0     = HUB_CLAMP_H;               // 轴颈起点
 HUB_J_Z1     = 16;                        // 轴颈终点 = 凸轮起点
-BAR_Y_ABS    = -35 + HUB_CLAMP_H/2;       // 装配预览用: 闸杆中心的绝对 Y
+HUB_Y_ABS    = -35;                       // 转毂原点的绝对 Y
+BAR_Y_ABS    = HUB_Y_ABS + HUB_CLAMP_H/2; // 装配预览用: 闸杆中心的绝对 Y
+// D 形轴孔的深度由电机位置反推: 轴从 MOT_Y0 往 -Y 伸 SHAFT_L
+// 局部 z = 绝对 y - HUB_Y_ABS
+BORE_Z0      = MOT_Y0 - SHAFT_L - HUB_Y_ABS - 0.5;   // 13.0, 多 0.5 不让轴顶死
+BORE_Z1      = MOT_Y0 - HUB_Y_ABS + 1;               // 23.5
+SETSCREW_Z   = 19;                        // 顶丝高度, 落在凸轮段(16~22)正中
 
 /* ============ 遥控器 ============ */
 RC_L = 60;  RC_W = 30;  RC_H = 20;  RC_R = 4;  RC_TOP_T = 3;
@@ -228,6 +261,17 @@ module boss_top(h, d = BOSS_OD) {
 //   deep = z=0 以下还要继续打穿的深度 (盖板背面止口凸台就靠这个参数打穿)
 // 沉窝取标准 90°: 每深 1mm 直径收 2mm, 螺钉头才能真正坐平而不是卡在孔口。
 CSK_H = (HEAD_D - SCREW_CLR) / 2;      // = 1.0
+
+// D 形轴孔: 圆 **交** 半空间。平面距轴心 = SHAFT_FLAT - SHAFT_D/2, 再放 CLR。
+// 千万不要写成 圆 **并** 方块 —— 那样孔比轴还大, D 面失效, 轴会空转。
+FLAT_OFF = SHAFT_FLAT - SHAFT_D/2 + SHAFT_CLR;   // 1.0 + 0.15
+module d_bore(h) {
+    intersection() {
+        cylinder(d = SHAFT_D + 2*SHAFT_CLR, h = h);
+        translate([-SHAFT_D, -SHAFT_D, -1])
+            cube([2*SHAFT_D, SHAFT_D + FLAT_OFF, h + 2]);
+    }
+}
 
 module csk(h, deep = 0) {
     translate([0, 0, -deep - 1]) cylinder(d = SCREW_CLR, h = h + deep + 2);
@@ -318,9 +362,8 @@ module housing_shell() {
             difference() {
                 union() {
                     rbox(HS_L, HS_W, HS_H, HS_R);
-                    // 电机尾部外凸包 (+Y 面): N20 比内腔长约 2mm, 必须让位
-                    translate([0, HS_W/2 - 1, PIV_Z]) rotate([-90, 0, 0])
-                        cylinder(d = MOT_BOSS_D, h = MOT_BOSS_H + 1);
+                    // 尾部外凸包已删除: 电机前端面定在 y=-12.5, 26mm 长的尾端
+                    // 只到 y=+13.5, 离 +Y 内壁(21)还有 7.5mm, 不需要让位
                     stop_rib();
                 }
                 // 内腔: 底板 2mm + 顶盖 2mm 都保留
@@ -331,9 +374,6 @@ module housing_shell() {
                 // 轴颈孔 (-Y 壁)
                 translate([0, -HS_W/2 - 1, PIV_Z]) rotate([-90, 0, 0])
                     cylinder(d = HUB_J_D + 2*GAP, h = WALL + 2);
-                // 电机尾部让位腔
-                translate([0, HS_W/2 - WALL - 0.01, PIV_Z]) rotate([-90, 0, 0])
-                    cylinder(d = MOT_D, h = MOT_BOSS_H + WALL + 1);
                 // 麦克风格栅 (-X 面, 朝使用者, 全部落在 -Y 半壳)
                 for (i = [0 : 3])
                     translate([-HS_L/2 - 1, -13 + i*3.5, MIC_Z]) rotate([0, 90, 0])
@@ -361,26 +401,76 @@ module housing_shell() {
     }
 }
 
-// 机械止挡筋: 100° 软后挡, 正常不接触, 限位失效时兜底
-module stop_rib() {
-    // 深度取 11 (y=-30..-19), 让筋伸进内腔 2mm, 由内腔切削干净地切平在 y=-21;
-    // 若刚好停在 -21 会与内腔面重合, 同样产生非流形
-    translate([0, 0, PIV_Z]) rotate([0, -STOP_ANG, 0])
-        translate([9, -HS_W/2 - 7, -3.5]) cube([6, 11, 7]);
+/* 机械止挡: STOP_ANG 软后挡, 正常工作(0~90°)不接触, 限位失效时兜底。
+
+   位置**不是摆出来的, 是算出来的**:
+     毛坯(扇形) − 转臂从 0° 扫到 STOP_ANG 所占的区域 = 止挡料
+   差集的边界恰好就是转臂在 STOP_ANG 时的轮廓, 所以闸杆转到 STOP_ANG 正好
+   相切, 之前一路无接触。转臂尺寸(HUB_ARM_*)一改, 挡块自动跟着走。
+
+   注意扫掠必须用**转臂**的截面而不是闸杆的: 转臂半高 7mm 比闸杆(4mm)厚,
+   包络更大, 是它先碰到挡块。                                            */
+
+// 转臂在旋转平面内的截面, 原点 = 转轴
+module arm_section()
+    translate([HUB_ARM_X0, -HUB_ARM_W/2])
+        square([HUB_ARM_X1 - HUB_ARM_X0, HUB_ARM_W]);
+
+// 转臂从 a0 扫到 a1 占据的 2D 区域。
+// 必须对相邻两个位置取 hull() 填缝, 不能只做并集 —— 靠近转臂尖端半径
+// (r→21.19) 时, 转臂的角度覆盖收窄到只有 1.7°, 单纯并集会在相邻位置之间
+// 漏出一条条没扫到的细缝, 挡块就会长出提前挡路的毛刺。实测漏缝会让闸杆
+// 在 85° 就撞上。hull 把缝填掉, 弦高误差只有 r·(1−cos(step/2)) ≈ 0.005mm。
+module arm_sweep(a0, a1, step = 2.5)
+    for (a = [a0 : step : a1 - step])
+        hull() { rotate(a) arm_section(); rotate(a + step) arm_section(); }
+
+// 毛坯: 半径 STOP_R0~STOP_R1、从 STOP_ANG 起张 STOP_SPAN 的扇环
+module stop_blank() {
+    intersection() {
+        difference() { circle(r = STOP_R1); circle(r = STOP_R0); }
+        polygon([[0, 0],
+                 [2*STOP_R1*cos(STOP_ANG),                2*STOP_R1*sin(STOP_ANG)],
+                 [2*STOP_R1*cos(STOP_ANG + STOP_SPAN/2),  2*STOP_R1*sin(STOP_ANG + STOP_SPAN/2)],
+                 [2*STOP_R1*cos(STOP_ANG + STOP_SPAN),    2*STOP_R1*sin(STOP_ANG + STOP_SPAN)]]);
+    }
 }
 
-// 电机座: -Y 半是减速箱方座, +Y 半是机身圆弧托
+module stop_rib() {
+    // rotate([90,0,0]) 把 2D 的 y 立成装配 Z、拉伸方向变成 -Y;
+    // 先平移 HS_W/2-WALL 让筋从内壁 y=-21 起长, 埋进壁里 2mm 实体互穿
+    translate([0, 0, PIV_Z]) rotate([90, 0, 0])
+        translate([0, 0, HS_W/2 - WALL])
+            linear_extrude(height = STOP_OUT)
+                difference() {
+                    stop_blank();
+                    arm_sweep(0, STOP_ANG);
+                }
+}
+
+/* 电机座: 沿 Y 的 10×12 **矩形**隧道 + 尾挡筋。
+
+   固定方式 = 轴向推入 + 合壳夹紧:
+     1. 电机从分模面(y=0)沿 -Y 推进左壳的半条隧道, 直到尾端顶住尾挡筋;
+     2. 右壳扣上, 另外半条隧道合拢, 26mm 长的矩形配合把电机箍住;
+     3. 矩形截面本身就防转 —— N20 靠这个受扭, 不需要额外螺丝(N20 机身也
+        没有安装孔)。
+   为什么**没有前端挡肩**: 减速箱端面在 y=-12.5, 而凸轮占 y=-19..-13,
+   任何挡肩都要伸到半径 7.8mm 以内才能挡住端面, 那里已经被凸轮占了。
+   电机往 -Y 的位移由轴插进转毂孔的深度限住(轴 9mm / 孔 10.5mm, 余 1.5mm)。 */
 module motor_seat() {
+    PW    = MOT_W + 2*MOT_CLR;              // 10.8
+    PH    = MOT_H + 2*MOT_CLR;              // 12.8
+    RIB_T = 3;
+    Z0    = WALL - 1.5;                     // 往底板里埋 1.5mm
+    TOP_Z = PIV_Z + PH/2 + 2;               // 立板顶面, 高出电机 2mm
     difference() {
-        union() {
-            // 往底板里埋 1.5mm
-            translate([-9.5, -11, WALL - 1.5]) cube([19, 8, PIV_Z + 1.5]);
-            for (yy = [3, 15]) translate([-9.5, yy, WALL - 1.5]) cube([19, 3, PIV_Z + 1.5]);
-        }
-        // 减速箱方形让位
-        translate([-MOT_GB/2, -13, PIV_Z - MOT_GB/2]) cube([MOT_GB, 12, 20]);
-        // 机身圆形让位
-        translate([0, -30, PIV_Z]) rotate([-90, 0, 0]) cylinder(d = MOT_D, h = 60);
+        // 立板从底板长起(打印时 Y 是层向, 立板贴着地板长, 不需要支撑)
+        for (yy = [MOT_Y0 + 2, MOT_Y0 + MOT_L*0.4, MOT_Y0 + MOT_L*0.75,
+                   MOT_Y0 + MOT_L + 0.5])
+            translate([-PW/2 - 3, yy, Z0]) cube([PW + 6, RIB_T, TOP_Z - Z0]);
+        // 电机隧道 (尾挡筋不挖, 所以只挖到 MOT_L+0.5)
+        translate([-PW/2, MOT_Y0, PIV_Z - PH/2]) cube([PW, MOT_L + 0.5, PH]);
     }
 }
 
@@ -469,13 +559,14 @@ module hub() {
         // 螺纹只咬在闸杆的 φ1.7 底孔里。
         translate([BAR_PIN_X, 0, -1])
             cylinder(d = SCREW_CLR, h = HUB_CLAMP_H + 2);
-        // 电机 D 形轴孔 (φ3, 深 9)
-        translate([0, 0, 13]) {
-            cylinder(d = 3 + GAP, h = 10);
-            translate([-2.5, 0.95, 0]) cube([5, 2, 10]);
-        }
-        // 顶丝 (M2 无头, 顶在 D 形面上)
-        translate([0, 0, 18]) rotate([90, 0, 0]) cylinder(d = BOSS_PILOT, h = 20, center = true);
+        // 电机 D 形轴孔。
+        // v2.5 之前这里是 cylinder **并** cube —— 圆孔外面再挂一个方槽,
+        // 孔比轴还大一圈, D 形面根本没被包住, 轴插进去空转。
+        // D 形孔的正确做法是 圆 **交** 半空间: 把圆切掉一块平面。
+        translate([0, 0, BORE_Z0]) d_bore(BORE_Z1 - BORE_Z0);
+        // 顶丝 (M2, 顶在 D 形平面上; 扭矩靠 D 面传, 顶丝只防轴向窜出)
+        translate([0, 0, SETSCREW_Z]) rotate([90, 0, 0])
+            cylinder(d = BOSS_PILOT, h = 20, center = true);
         // 配重仓 (M5 钢螺母, 平躺): 从 -X 端开口塞进去再点胶, 不再是封死的空腔
         translate([HUB_ARM_X0 - 1, -5, 2]) cube([10, 10, HUB_CLAMP_H - 4]);
     }

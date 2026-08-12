@@ -1,4 +1,4 @@
 - [用中文回答](respond-in-chinese.md) — 用户明确要求，优先于会话里的英文配置
 - [记忆存放位置](memory-lives-in-project.md) — 正文在项目 memory\，C 盘只留索引指针
-- [道闸玩具 v2.5 范围与决策](daozha-toy-scope.md) — 语音核心(3命令)/无喇叭/6-10岁/CAD v2.5(底座22)/装配自检见 check.scad/排母须买低背5.0mm
+- [道闸玩具 v2.6 范围与决策](daozha-toy-scope.md) — 语音核心(3命令)/无喇叭/6-10岁/CAD v2.6(底座22)/装配自检见 check.scad/排母须买低背5.0mm
 - [嘉立创EDA 桥接环境](easyeda-bridge-setup.md) — Claude Code 可直接操作 EDA，已跑通，含端口与陷阱

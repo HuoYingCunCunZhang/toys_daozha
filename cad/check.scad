@@ -94,3 +94,36 @@ if (t == 23) intersection() { translate([0,0,TRAY_H]) base_top();
         translate([0,0,WALL+PCB_SO+PCB_T]) linear_extrude(BUDGET + 0.2) pcb_outline();
         translate([-LIP_IN_X, -LIP_IN_Y, 0]) cube([2*LIP_IN_X, 2*LIP_IN_Y, 40]);
     } }
+
+/* ===== v2.6: 电机 / D 形轴 / 机械止挡 ===== */
+// 真实 D 形轴实体(无间隙), 用来验证转毂孔
+module d_shaft_solid(h) {
+    intersection() {
+        cylinder(d = SHAFT_D, h = h);
+        translate([-SHAFT_D, -SHAFT_D, -1])
+            cube([2*SHAFT_D, SHAFT_D + (SHAFT_FLAT - SHAFT_D/2), h + 2]);
+    }
+}
+// 30: D 形轴插得进转毂 -> EMPTY
+if (t == 30) intersection() { hub();
+    translate([0,0,BORE_Z0]) d_shaft_solid(BORE_Z1 - BORE_Z0); }
+// 31: 阳性对照 —— 整根 φ3 圆柱必须被 D 面挡住 -> NON-EMPTY
+//     若这条变 EMPTY, 说明孔又退化成整圆, D 面失效, 轴会空转
+if (t == 31) intersection() { hub();
+    translate([0,0,BORE_Z0]) cylinder(d = SHAFT_D, h = BORE_Z1 - BORE_Z0); }
+// 32: N20 机身 10×12×MOT_L 装得进电机座 -> EMPTY
+if (t == 32) intersection() { motor_seat();
+    translate([-MOT_W/2, MOT_Y0, PIV_Z - MOT_H/2]) cube([MOT_W, MOT_L, MOT_H]); }
+// 33: 阳性对照 —— 旧版假设的 12.5 方形必须装不进 -> NON-EMPTY
+if (t == 33) intersection() { motor_seat();
+    translate([-12.5/2, MOT_Y0, PIV_Z - 12.5/2]) cube([12.5, MOT_L, 12.5]); }
+// 34/35: 机械止挡。闸杆摆到 ang, 与止挡块求交。
+//        t=34 用 STOP_ANG-1 -> 必须 EMPTY;  t=35 用 STOP_ANG+1 -> 必须 NON-EMPTY
+module swung_hub(a)
+  translate([HS_X_ABS, 0, BASE_H + PIV_Z]) rotate([0, -a, 0])
+  translate([-HS_X_ABS, 0, -(BASE_H + PIV_Z)])
+  translate([HS_X_ABS, HUB_Y_ABS, BASE_H + PIV_Z]) rotate([-90,0,0]) hub();
+if (t == 34) intersection() { swung_hub(STOP_ANG - 1);
+    translate([HS_X_ABS, 0, BASE_H]) stop_rib(); }
+if (t == 35) intersection() { swung_hub(STOP_ANG + 1);
+    translate([HS_X_ABS, 0, BASE_H]) stop_rib(); }
