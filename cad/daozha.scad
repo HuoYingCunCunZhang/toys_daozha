@@ -1,6 +1,22 @@
 // =====================================================================
-//  道闸玩具 v2.3 · 参数化结构件
-//  依据: 道闸玩具_电路与结构设计方案_v2.md
+//  道闸玩具 v3.0 · 参数化结构件
+//  依据: 道闸玩具_元器件尺寸基准_v1.md (元件尺寸唯一事实源)
+//        道闸玩具_底板机械约束_v1.md §七之二 (PCB 定稿坐标)
+//
+//  v2.6 -> v3.0 (解冻。元器件全部实测落地 + PCB 定稿, 12 项积压改动一次做完):
+//    [1]  底座 150×55×22 -> **183×73×25**; 承载底板 87×47 -> **120×65**
+//         (根因: U4 实测 37mm 长, 老板子放不下。见机械约束 §七之二)
+//    [2]  电池仓按成品 51×34×10 重排, 引线朝 -X
+//    [3]  转毂拆成 hub(主体) + cam(凸轮盘) —— 一整件穿不过 φ8.5 壁孔
+//    [4]  壁孔内侧加 φ12×4 凸台, 轴承长度 2 -> 6mm
+//    [5]  电机 MOT_L 25.2 / SHAFT_L 10 / SHAFT_FLAT 2.45 + φ4×0.7 轴根凸台让位
+//    [6]  凸轮升程 3.3 (PT Max 反推), 凸起两端各加 18° 过渡斜坡 (原为直角台阶)
+//    [7]  开关托板整块方板 -> 两块独立安装台; 底孔改**径向长圆孔**(±1.5 可调)
+//    [8]  按键孔 φ6.5 -> φ9 + 背面沉孔/导向凸台; 新增 btn_cap ×2
+//    [9]  麦克风: 前面板内侧 φ15.4×1.2 圆窝 + 上下压舌
+//    [10] 上盖: TP4056 充电灯观察孔; Type-C / 拨柄开口对准 PCB 实际坐标
+//    [11] 遥控器: 补拨动开关开口 + 板载蓝灯观察孔; 电池仓按含保护板 7×21×32
+//    [12] 文件头版本号归位
 //
 //  坐标约定 (OpenSCAD Z 朝上):
 //    X  = 前后。-X = 长脚侧(按键 / Type-C)，+X = 闸杆伸出侧(道路)
@@ -37,14 +53,16 @@
 
 // GUI 里改这个字符串:
 part = "assembly";
-// assembly | layout | base_tray | base_top | house_l | house_r | hub
-// bar_a | bar_b | rc_bottom | rc_top
+// assembly | explode | layout | base_tray | base_top | house_l | house_r | hub
+// cam | btn_cap | bar_a | bar_b | rc_bottom | rc_top
 
 // 命令行用数字 (避开 shell 传引号的麻烦):
-//   openscad -D p=3 -o stl/house_l.stl daozha.scad
+//   openscad -D p=3  -o stl/house_l.stl daozha.scad
+//   openscad -D p=13 -o png/explode.png --imgsize=1600,1200 daozha.scad   <- 爆炸图
 p = 0;
 PARTS = ["assembly", "layout", "base_tray", "base_top", "house_l",
-         "house_r", "hub", "bar_a", "bar_b", "rc_bottom", "rc_top"];
+         "house_r", "hub", "bar_a", "bar_b", "rc_bottom", "rc_top",
+         "cam", "btn_cap", "explode"];
 sel = (p == 0) ? part : PARTS[p];
 
 $fn = 48;
@@ -60,40 +78,59 @@ LIP_T      = 2.0;             // 上盖背面止口凸台高度 (base_top / rc_t
 BOSS_CLR   = 0.2;             // 螺柱顶面相对止口底面的让空, 保证外沿先贴合
 
 /* ============ 底座 ============ */
-BASE_L = 150;  BASE_W = 55;
-// v2.5: 20 -> 22。为的是让 U1/U2/U4 的 8.5mm 排母装得下 —— 20mm 时板面以上
-// 只有 11.4mm, DevKit 插排母叠高 13.2mm, 差 1.8mm。加高 2mm 后净空 13.4mm,
-// 选型锁定和已连线校验的原理图一个字都不用改。
+// v3.0: 150×55×22 -> 183×73×25。
+// 长宽是被 PCB 逼大的 (U4 实测 37mm, 老板子 100×55 差 3.2mm 塞不下),
+// 换算关系 BASE_L = 板长 + 63、BASE_W = 板宽 + 8, 见机械约束 §一。
+// 高度 22 -> 25 是顺带把按键帽的行程/导向长度做够 (见 BTN_* 那段)。
 // 转轴离地 42 由 PIVOT_ABS 反推自动保持, 杆顶仍 46mm, 锁定约束不破。
-BASE_H = 22;
+BASE_L = 183;  BASE_W = 73;
+BASE_H = 25;
 TOP_T  = 3;
-TRAY_H = BASE_H - TOP_T;      // 19
+TRAY_H = BASE_H - TOP_T;      // 22
 BASE_R = 3;
 
-// 内腔: x ±73, y ±25.5, 地板面 z=2, 天花板(上盖背面) z=17
-// v2.3 的"止口"是 rbox 生成的**实心板**, 145.5×50.5×2 整块压在 15~17mm,
-// 把内腔净高从 15 砍到 13 —— ESP32 装不进去的真因。改成环形。
+// 内腔: x ±89.5, y ±34.5, 地板面 z=2, 天花板(上盖背面) z=22
+// v2.3 的"止口"是 rbox 生成的**实心板**, 整块压在天花板下 2mm,
+// 把内腔净高砍掉 2mm —— ESP32 装不进去的真因。改成环形。
 LIP_W    = 6.5;                                    // 止口环宽
-LIP_IN_X = (BASE_L - 2*WALL - 2*GAP)/2 - LIP_W;    // 66.25
-LIP_IN_Y = (BASE_W - 2*WALL - 2*GAP)/2 - LIP_W;    // 18.75
-// => 中央净空区 x ±66.25 / y ±18.75, 净高 15mm; 环下方净高 13mm
+LIP_IN_X = (BASE_L - 2*WALL - 2*GAP)/2 - LIP_W;    // 82.75
+LIP_IN_Y = (BASE_W - 2*WALL - 2*GAP)/2 - LIP_W;    // 27.75
+// => 中央净空区 x ±82.75 / y ±27.75, 净高 20mm; 环下方 18mm
+//    板面(5.6)以上: 中央区 16.4mm / 环下方 14.4mm
 
 // 角螺柱: 必须待在止口环正下方(沉窝才有料可埋), 且要让开电池。
-// φ6 是为了嵌进 x=±73 / y=±25.5 两侧内壁, 否则 13.8mm 高的细柱会立不稳。
+// φ6 是为了嵌进 x=±89.5 / y=±34.5 两侧内壁, 否则细高柱立不稳。
+// PCB 的 -X 两角开 5×5 缺口让开这两根。
 CORNER_OD = 6.0;
-BASE_BOSS = [[-70.5, 23], [-70.5, -23], [70.5, 23], [70.5, -23]];
+BASE_BOSS = [[-87, 32], [-87, -32], [87, 32], [87, -32]];
 
-// 按键 [x, y]: 必须同时满足三条, 位置是被夹出来的不是随便挑的 ——
-//   1) x < 2   : 闸体占 x=2..48, 按键不能被闸体压住
-//   2) |y| ≤ 15.5 : φ6.5 孔要整个待在止口环以内(|y|<18.75), 否则 6×6×12 的
-//                   顶杆会在 z=15 撞上环, 根本按不下去
-//   3) 让开 U1 DevKit 和 U3 TP4056 在板上的占位
-BTN_POS = [[-40, 10], [-20, 10]];
-BTN_D = 6.5;
+// 按键 [x, y] —— **PCB 定稿值, 不是结构挑的**(机械约束 §七之二):
+//   SW2(落杆) = (0, +20)、SW1(起杆) = (+20, +20), 同一 Y、间距 20。
+// 校核: 背面沉孔 φ12.5 -> y 13.75..26.25, 止口环内缘 27.75 ✓ 不撞环;
+//       DevKit 顶边在 y=+5.97 ✓ 让开。
+BTN_POS = [[0, 20], [20, 20]];
 
-USB_W = 10;  USB_H = 5;  USB_Z = 8;  USB_Y = 0;
-// PSW 从 19 挪到 15: 19 时开口(y=15~23)会啃进角螺柱(y=20~26)
-PSW_W = 8;   PSW_H = 4;  PSW_Y = 15;
+// 上盖按键孔三段 (v3.0: 顶杆够不到盖面, 必须配打印按键帽 btn_cap)
+BTN_D       = 9.0;    // 通孔 (帽柄 φ8.5 穿过)
+BTN_CB_D    = 12.5;   // 背面沉孔 (挡住帽的 φ12 法兰, 防脱)
+BTN_CB_T    = 1.5;    // 沉孔吃进 3mm 面板的深度
+BTN_GUIDE_H = 2.5;    // 背面再加的导向凸台高度 -> 沉孔总深 4.0
+BTN_GUIDE_D = 14.0;   // 导向凸台外径
+BTN_SW_H    = 12.0;   // 轻触开关总高 (6×6×12, 底座 3.5 + 柄 8.5)
+
+// 前端面开口。y 全部对准 PCB 上器件的实际坐标:
+//   U3 TP4056 的 Type-C 座中心 y=-6; SW3 拨柄中心 y=+17, 拨柄尖 x=-92.01
+//   (外壁面 -91.5, 即拨柄只露出 0.51mm —— 开口要开够大, 手指伸进去拨)
+USB_W = 10;  USB_H = 5;  USB_Z = 8;  USB_Y = -6;
+PSW_W = 8;   PSW_H = 4;  PSW_Y = 17;
+
+// 上盖 TP4056 充电指示灯观察孔。U3 在 (-74.8, -6), 本体 28×17 占 x -88.2..-60.2。
+// ⚠ 模块上两颗 LED 的确切位置**没有实测**, 这里按"指示灯紧邻 Type-C 座"的
+//   常见排布开一个长圆窗。收到模块务必卡尺核对, 不对就改 LED_WIN_POS 的 x。
+// ⚠ 该窗口会在 -X 端局部切断止口环 (环占 |x| 82.75..89.25), 只影响定位不影响强度。
+LED_WIN_POS = [-84, -6];
+LED_WIN_L   = 10;     // x 向
+LED_WIN_W   = 6;      // y 向
 
 /* --- v2.4 排布翻转 --------------------------------------------------
    v2.3 之前: 电池占 -X, 四个模块散放 +X。两个硬伤——
@@ -106,46 +143,138 @@ PSW_W = 8;   PSW_H = 4;  PSW_Y = 15;
    现在按"接口在哪、板子就在哪"翻过来: 承载底板占 -X 半场正对前端面开口,
    电池挪到 +X 半场。按键位置不动, 自然落到底板上方。                    */
 
-// 电池 103450 卧放 (50×34×10), 仓比电芯每边放 1mm
-BAT_L = 50;  BAT_W = 34;  BAT_T = 10;
-BAT_X0 = 21;  BAT_X1 = 73;    // 电池仓 x 范围 (52)
+// 电池 103450 卧放。⚠ 用**含保护板和引线的成品尺寸 51×34×10**(卖家确认),
+// 不是裸电芯的 50。仓比成品每边放 1mm -> 53.5 长 × 36 宽。
+// 引线必须朝 -X (承载底板那侧), 从 -X 挡边上方 (z 12..22 的空隙) 跨过去接 J4。
+BAT_L = 51;  BAT_W = 34;  BAT_T = 10;
+BAT_X0 = 36;  BAT_X1 = 89.5;  // 电池仓 x 范围 (53.5), +X 端直接靠内壁
 BAT_YH = 18;                  // 电池仓 y 半宽 (36)
 
-// 承载底板 (工程"道闸玩具承载底板", 见 道闸玩具_底板选型锁定_v1.md)
-PCB_X0    = -71;  PCB_X1 = 16;   // 87 长
-PCB_YH    = 23.5;                // ±23.5 -> 47 宽
+// 承载底板 (工程"道闸玩具承载底板")。**外形与安装孔是 PCB 定稿值**,
+// 见 道闸玩具_底板机械约束_v1.md §七之二 —— 结构让路给 PCB, 不是反过来。
+PCB_X0    = -88;  PCB_X1 = 32;   // 120 长
+PCB_YH    = 32.5;                // ±32.5 -> 65 宽
 PCB_T     = 1.6;
 PCB_SO    = 2.0;                 // 支撑柱净高 -> 板底 z=4, 板面 z=5.6
-PCB_NOTCH = 4;                   // -X 两角让开角螺柱的缺口
-PCB_MNT   = [[-63, 19.5], [-63, -19.5], [11, 19.5], [11, -19.5]];
-// 板面以上可用高度 = TRAY_H - 5.6 = 13.4mm (中央区); 见 道闸玩具_底板机械约束_v1.md
+PCB_NOTCH = 5;                   // -X 两角让开角螺柱的 5×5 缺口
+PCB_MNT   = [[-82, 27], [-82, -27], [26, 27], [26, -27]];
+PCB_Z     = WALL + PCB_SO + PCB_T;   // 板面 z = 5.6
+// 板面以上可用高度 = TRAY_H - 5.6 = 16.4mm (中央区); 见机械约束 §三
 // PCB_SO 不要往上加: 它每加 1mm, 板面以上就少 1mm
 // U1 叠高 = 排母 + DevKit 排针隔片 2.5 + PCB 1.57 + 模组 3.1
-//   标准 8.5 排母 -> 15.67  ✗ 超 2.3mm, 且 BASE_H 被开关托板卡在 ≤22.5 救不回来
-//   低背 5.0 排母 -> 12.17  ✓ 余 1.2mm  <- 采用这个
+//   标准 8.5 排母 -> 15.67  ✗ ; 低背 5.0 排母 -> 12.17  ✓  <- 采用这个
 U1_STACK  = 12.2;
 
-/* ============ 闸体 (局部原点 = 闸体底面中心, 绝对 X = +25) ============ */
+/* ============ 按键帽 btn_cap (v3.0 新增打印件 ×2) ============
+   6×6×12 的轻触开关顶杆只到 z=17.6, 盖面在 25 —— 差 7.4mm, 够不到;
+   而且顶杆是 φ3 的小锥台, 6~10 岁的手指按着硌手。所以配打印帽:
+   按压面 φ8.5、露出盖面 5mm、法兰 φ12 卡在背面沉孔里防脱。
+   ⚠ 帽子是**扣上盖之前从背面放进沉孔的**(法兰比通孔大), 装配顺序别搞反。
+   晃动量取决于配合间隙: FDM 0.5 -> 帽顶晃约 1mm; 树脂 0.3 -> 约 0.6mm。
+   建议和转毂一起用树脂打, 把 CAP_CLR 调到 0.3。                          */
+CAP_CLR      = 0.5;   // 直径上的配合间隙
+CAP_EXPOSE   = 5.0;   // 露出盖面的高度
+CAP_FLOAT    = 0.2;   // 帽底与顶杆之间留的浮动, 免得静止时就预压住开关
+CAP_BLIND_D  = 3.2;   // 套住顶杆的盲孔 (顶杆 φ3->φ2.5 锥台, 松套即可)
+CAP_BLIND_L  = 1.0;
+// 法兰厚。**这个数直接决定按键按不按得动**:
+//   帽子能下压的距离 = 沉孔总深 4.0 − 法兰厚
+//   而按下去要走 CAP_FLOAT(0.2 空行程) + 开关行程 0.25 = 0.45
+//   取 3.5 的话只剩 0.5 可压, 余量 0.05mm —— 打印公差 ±0.15 就能让法兰先坐死
+//   在沉孔底上, 开关根本压不到。取 3.0, 余量 1.0−0.45 = 0.55mm。
+//   (导向不受影响: 法兰 3.0 + 柄在通孔里 1.5, 跨距仍有 4.5mm)
+CAP_FLANGE_T = 3.0;
+CAP_LOW_D    = 8.0;   // 法兰以下那段柄 (悬在腔里, 不受孔约束)
+// 绝对高度链 (z=0 = 底座底面外表面)
+CAP_SEAT_Z   = TRAY_H + BTN_CB_T;                        // 23.5 沉孔顶面 = 法兰止位
+CAP_POCKET_Z = CAP_SEAT_Z - BTN_CB_T - BTN_GUIDE_H;      // 19.5 沉孔下口
+CAP_TOP_Z    = BASE_H + CAP_EXPOSE;                      // 30.0
+CAP_BOT_Z    = PCB_Z + BTN_SW_H + CAP_FLOAT - CAP_BLIND_L;  // 16.8
+CAP_H        = CAP_TOP_Z - CAP_BOT_Z;                    // 13.2
+
+/* ============ 闸体 (局部原点 = 闸体底面中心, 绝对 X = HS_X_ABS) ============ */
 HS_L = 46;  HS_W = 46;  HS_H = 62;  HS_R = 3;
-HS_X_ABS = 25;
+// 🔴 v3.0: 25 -> 55。**闸体原来正压在起杆按键上**。
+// PCB 定稿把两个按键放到 (0,+20) 和 (+20,+20), 而闸体占 x=2..48 —— x=20 那颗
+// 整个被闸体盖住, 手指根本够不到。v2.6 参数区里"按键 x<2"那条注释就是为了
+// 躲开闸体的, 但按键位置后来由 PCB 定了, 就没人回头看这条。
+// 按项目原则(结构让路给 PCB)只能挪闸体: 55 -> 占 x=32..78, 离按键边缘 7.75mm。
+// 顺带也更像真道闸 —— 底座放大到 183 以后, 闸体待在 x=25 会把 +X 侧空出 43mm。
+// 代价: 上盖走线孔跟着挪到电池上方, 闸体来的飞线要贴电池顶面(有 10mm 空隙)
+//       往 -X 走到板子上。
+HS_X_ABS = 55;
 // 转轴离地 42 是锁定约束(用户小车最矮 50mm, 杆顶 46 必须低于它)。
 // PIV_Z 由它反推, 这样改 BASE_H 时转轴高度自动保持不变 —— 以前写死 22,
 // 一旦把底座加高就会连带把转轴顶上去, 违反锁定尺寸。
 PIVOT_ABS = 42;
-PIV_Z = PIVOT_ABS - BASE_H;   // 22mm 底座 -> 20
-// 上限提醒: 开关托板底面 = PIV_Z - SW_HOLE_R - 5, 必须 >= 闸体地板 WALL,
-// 即 PIV_Z >= 19.5, 于是 BASE_H <= 22.5。想再加高底座就得先缩开关托板。
+PIV_Z = PIVOT_ABS - BASE_H;   // 25mm 底座 -> 17
+// v2.5 那条"BASE_H <= 22.5"的上限**已经作废**: 它来自整块方形开关托板的底面
+// (PIV_Z - SW_HOLE_R - 5) 必须高于闸体地板。v3.0 托板拆成两块独立安装台以后,
+// 板底不再是一整条, 这个约束消失了。现在 SW_HOLE_R 可以按开关实际 FP 取 14.6。
 
 WIRE_D = 8;
 WIRE_P = [0, -16.5];          // 走线孔 (闸体局部 XY), 避开螺柱与电机座
 
-HUB_J_D    = 8;
-CAM_BASE_D = 12;
-CAM_LOBE_D = 18;
-CAM_ARC    = 25;
-SW_HOLE_R  = 12.5;            // 微动开关安装孔半径 (需实物微调)
-SW_SPACING = 9.5;
-MIC_Z      = 38;
+HUB_J_D    = 8;               // 壁孔 φ8.5 = HUB_J_D + 2*GAP; 轴颈 φ7.5
+
+/* --- 转轴一线上的轴向排布 (绝对 Y, 从壳外往壳内) --------------------
+   -35 .. -24   转毂夹杆臂 (壳外)
+   -24 .. -23   臂与外壁的间隙 1mm
+   -23 .. -21   闸体 -Y 壁
+   -21 .. -17   **轴承凸台 φ12** (v3.0 新增, 把 φ8.5 孔的轴承长度 2 -> 6mm)
+   -22.2..-17.5 开关安装台 (埋进壁里 1.2, 露出 3.5)
+   -17.5..-11.7 微动开关本体 (5.8 厚, 拧在安装台上)
+   -16.5..-11.5 **凸轮 cam** (独立零件, 5 厚, 落在开关本体的 Y 覆盖里)
+   -21   ..-11   电机 D 形轴 (SHAFT_L=10)
+   -11          电机减速箱端面 MOT_Y0
+   转毂 D 形孔 -21.5..-11.5, 与轴咬合 9.5mm                              */
+WALL_BOSS_D = 12;             // 轴承凸台外径
+WALL_BOSS_L = 4;              // 轴承凸台长度 (壁 2 + 凸台 4 = 轴承长 6)
+
+/* --- 凸轮 (v3.0 拆成独立零件 cam) ---
+   升程 3.3 是由 ZIPPY 官方规格书的 **Pre-travel Max 3.0** 反推的, 不是卖家表
+   上那个"行程 2.2"(那是 FP-OP 典型值)。按 2.2 设计的话最坏批次压不动开关。
+   凸起两端**必须**有过渡斜坡: 直上直下的 3.3mm 垂直墙, 直杆压柄只会顶死。   */
+CAM_BASE_D = 12;              // 基圆 φ12 (r=6, 杠杆自由位置)
+CAM_LOBE_D = 18.6;            // 凸起 φ18.6 (r=9.3) -> 升程 3.3
+CAM_ARC    = 25;              // 凸起顶部平段张角
+CAM_RAMP   = 18;              // 每侧过渡斜坡张角。凸起总张角 25+2*18=61 < 90,
+                              // 所以转到另一只开关时这只已经完全释放
+CAM_T      = 5;               // 凸轮盘厚
+CAM_BORE_CLR = 0.2;           // 凸轮孔对轴颈的配合间隙(直径上)
+CAM_FLAT   = 3.0;             // 轴颈上的键面到轴心距离 (凸轮靠它定角度)
+CAM_SS_R   = 11;              // 顶丝凸台外半径 (长在凸起的**背面**, 永远扫不到开关)
+
+/* --- 限位微动开关 ZIPPY DF-P1S-1E-M-Z ---
+   本体 12.70×6.60×5.80, 安装孔 φ2.2 @ 6.5, FP Max 10.6。
+   SW_HOLE_R 由 FP 反推: 6 + 10.6 - 2.0 = 14.6。
+   ⚠ 规格书只给 FP 的 Max 没给 Min, 实物偏小就会撞凸起 ->
+     安装孔做成**径向长圆孔** ±1.5 可调, 装配时滑到刚好动作再拧紧。          */
+SW_ANG      = [0, 90];        // 两只开关的方位角 (0=+X 落杆位, 90=+Z 起杆位)
+SW_HOLE_R   = 14.6;
+SW_SPACING  = 6.5;
+SW_SLOT     = 3.0;            // 长圆孔两端圆心距 -> ±1.5
+SW_PAD_R0   = 10.5;           // 安装台内半径 (让开凸轮 r9.3)
+SW_PAD_R1   = 18.5;           // 外半径 (插脚最外 20.1, 内壁 21)
+SW_PAD_W    = 13;             // 安装台切向宽度
+SW_PAD_T    = 4.7;            // 安装台总厚 (含埋进壁的 1.2)
+SW_PILOT_D  = 4.5;            // 自攻底孔深度。壁厚方向留 1mm 不打穿 ->
+                              // 外表面看不到孔, 螺纹咬合 4.5mm
+
+/* --- 麦克风 INMP441 (圆板 φ14 × 厚 1, 贴闸体前面板内侧) ---
+   窝比板大 1.4mm 是**故意的**: 装配时靠这 0.7mm 径向余隙先把下边塞进下压舌,
+   再把上边推过上压舌 (上压舌只压 0.6)。两片压舌都是死的, 不靠塑料弹性。
+   声学上不需要对准某个孔 —— 板与窝底之间那 0.2mm 缝就是共用声腔, 4 个格栅
+   孔通到哪儿都行。                                                        */
+MIC_D        = 14;
+MIC_POCKET_D = 15.4;
+MIC_POCKET_T = 1.2;
+MIC_Y        = -9;            // 窝中心 (闸体局部 Y), 整个落在 -Y 半壳里
+MIC_Z        = 38;
+MIC_TAB_W    = 5;             // 压舌宽 (Y 向)
+MIC_TAB_T    = 1.5;           // 压舌厚 (往腔内伸)
+MIC_TAB_LO   = 1.2;           // 下压舌覆盖量
+MIC_TAB_UP   = 0.6;           // 上压舌覆盖量 (必须 < 径向余隙 0.7, 否则装不进)
 
 /* --- N20 减速电机 ---------------------------------------------------
    通用 N20 微型金属减速电机 (= Pololu micro metal gearmotor 外形)。
@@ -154,17 +283,21 @@ MIC_Z      = 38;
        15.6mm, 根本塞不进 φ12.4 的圆槽;
      · 减速箱按 12.6 方形建模, 实际 10×12, 一个方向松了 2.6mm;
      · README 让人调的 MOT_TOTAL 参数在源码里根本不存在。
-   ⚠ 收到实物必须卡尺复核, 尤其 MOT_L —— 随减速比在 24~30mm 之间变。      */
+   v3.0: 尺寸全部换成卖家尺寸图/实物标注图的实测值 (📄 元器件尺寸基准 §1)。 */
 MOT_W    = 10.0;   // 截面宽 (装配 X 向)
 MOT_H    = 12.0;   // 截面高 (装配 Z 向)
-MOT_L    = 26.0;   // 总长(机身+减速箱)。上限 32, 再长顶到 +Y 内壁
+MOT_L    = 25.2;   // 机身总长 = 减速箱 9 + 电机 15 + 尾盖 1.2  (实测, 原写 26)
 MOT_CLR  = 0.4;    // 电机四周配合间隙
-// 减速箱前端面 Y。下限被凸轮卡住: 凸轮占 y=-19..-13, 电机不能越过 -13
-MOT_Y0   = -12.5;
+// 减速箱前端面 Y。由凸轮反推: 凸轮占 -16.5..-11.5, 留 0.5 间隙 -> -11.0。
+// 尾端到 -11+25.2 = +14.2, 离 +Y 内壁(21) 还有 6.8mm ✓
+MOT_Y0   = -11.0;
+// 轴根凸台: 减速箱端面上 φ4 凸出 0.7, 转毂端面必须让开它 (v3.0 新增)
+MOT_HUBB_D = 4.0;
+MOT_HUBB_L = 0.7;
 
-SHAFT_D    = 3.0;  // D 形轴直径
-SHAFT_FLAT = 2.5;  // D 形轴"对边"尺寸(平面到对侧圆弧) -> 平面距轴心 = 2.5-1.5 = 1.0
-SHAFT_L    = 9.0;  // 轴伸出长度
+SHAFT_D    = 3.0;  // D 形轴直径 φ3.0 (0/-0.03)
+SHAFT_FLAT = 2.45; // D 形"对边"(平面到对侧圆弧) 实测 2.45 -> 平面距轴心 0.95
+SHAFT_L    = 10.0; // 轴伸出长度 (实测, 原按 9 建模, 孔会顶死)
 SHAFT_CLR  = 0.15; // 轴孔间隙。要传扭矩, 不能用 GAP=0.25 那么松
 
 /* --- 机械止挡 ---
@@ -217,20 +350,52 @@ SLOT_V       = BAR_H + 2*GAP;             // 8.5 -> 装配后竖直, 闸杆 8mm 
 SLOT_H       = BAR_W + 2*GAP;             // 5.5 -> 装配后水平, 闸杆 5mm 窄面朝下
 SLOT_Z0      = (HUB_CLAMP_H - SLOT_H) / 2;// 2.75, 槽在夹持段内居中
 BAR_PIN_X    = 6;                         // 横穿螺丝距杆根 6mm, 与 bar_a 的底孔对齐
-HUB_J_Z0     = HUB_CLAMP_H;               // 轴颈起点
-HUB_J_Z1     = 16;                        // 轴颈终点 = 凸轮起点
 HUB_Y_ABS    = -35;                       // 转毂原点的绝对 Y
+HUB_J_Z0     = HUB_CLAMP_H;               // 轴颈起点 (局部 11 = 绝对 -24)
+// v3.0: 凸轮拆走以后, 轴颈一直做到转毂末端 —— 它要同时穿壁孔、穿轴承凸台、
+// 托住凸轮盘, 而且里面就是电机 D 形孔。末端停在电机端面前 0.5mm。
+HUB_J_Z1     = MOT_Y0 - HUB_Y_ABS - 0.5;             // 23.5 (绝对 -11.5)
 BAR_Y_ABS    = HUB_Y_ABS + HUB_CLAMP_H/2; // 装配预览用: 闸杆中心的绝对 Y
 // D 形轴孔的深度由电机位置反推: 轴从 MOT_Y0 往 -Y 伸 SHAFT_L
 // 局部 z = 绝对 y - HUB_Y_ABS
-BORE_Z0      = MOT_Y0 - SHAFT_L - HUB_Y_ABS - 0.5;   // 13.0, 多 0.5 不让轴顶死
-BORE_Z1      = MOT_Y0 - HUB_Y_ABS + 1;               // 23.5
-SETSCREW_Z   = 19;                        // 顶丝高度, 落在凸轮段(16~22)正中
+BORE_Z0      = MOT_Y0 - SHAFT_L - HUB_Y_ABS - 0.5;   // 13.5, 多 0.5 不让轴顶死
+BORE_Z1      = HUB_J_Z1;                             // 23.5 -> 与轴咬合 9.5mm
+// 末端锪坑让开电机的 φ4×0.7 轴根凸台 (v3.0 新增)
+HUB_CB_D     = MOT_HUBB_D + 0.6;                     // 4.6
+HUB_CB_L     = 1.0;
+// 凸轮盘在轴颈上的位置 (外端与转毂末端齐平)
+CAM_Z0       = HUB_J_Z1 - CAM_T;                     // 18.5 (绝对 -16.5)
+CAM_Z1       = HUB_J_Z1;                             // 23.5 (绝对 -11.5)
+// 轴颈上的键面**只在凸轮段切**: 穿壁那段必须保持整圆, 否则轴承面缺一块。
+// 凸轮是从末端往里套的, 全程走在键面上, 不需要越过整圆段。
+CAM_FLAT_Z0  = CAM_Z0 - 0.3;
 
-/* ============ 遥控器 ============ */
+/* ============ 遥控器 ============
+   ⚠ 遥控器**还没有 PCB**(项目 README 任务 4)。下面带 (暂定) 的位置都是按
+     "电池占 -X 半场、C3 与 TP4056 占 +X 半场"的合理排布假设的, 等遥控器
+     布局定稿后必须回来核对。电池仓尺寸不是暂定 —— 那是实测。
+
+   🔴 **外形 60×30×20 已核算为装不下, 目标改 68 × 32 × 22**
+      (元器件尺寸基准 §遥控器内腔核算):
+        高度  电池 7 + 板 1.6 + C3 叠高 6.7 -> 内腔要 16, 现在只有 15
+        平面  元件占地 1027mm² / 内腔 56×26 = **71%**, 正是主机布不通的那个数
+      但**现在先不动这三个数** —— 按项目原则, 外壳尺寸要等 PCB 布局定稿再反推,
+      免得又出现"结构先定死、PCB 迁就不了"的老问题。                        */
 RC_L = 60;  RC_W = 30;  RC_H = 20;  RC_R = 4;  RC_TOP_T = 3;
 RC_BTN_X = [-18, 0, 18];
 RC_BTN_D = 6;
+// 502030 **含保护板**是 7×21×32 (裸电芯 5×20×30), 卧放占 -X 半场
+RC_BAT_T  = 7;   RC_BAT_W = 21;  RC_BAT_L = 32;
+RC_BAT_X0 = -RC_L/2 + WALL;               // -28, 直接靠 -X 内壁
+RC_BAT_X1 = RC_BAT_X0 + RC_BAT_L;         // +4
+RC_RIB_T  = 2.5;                          // 围挡厚
+// 拨动开关开口 (暂定): 与 Type-C 同在 +X 端面, 让开 USB 的 y ±5
+// ⚠ 开关型号已定为 **SK12D07VG7 卧式侧拨**(不是立式的 SS12D00) —— 开口在端面,
+//   立式的拨柄朝上, 方向对不上。这个坑主机踩过一次了。
+RC_PSW_W = 6;  RC_PSW_H = 4;  RC_PSW_Y = 9.5;  RC_PSW_Z = 8;
+// ❌ 状态灯观察孔已删除 (2026-08-15 用户拍板: 遥控器不做状态灯)。
+//    顺带了结了一处文档打架: 设计方案写"板载 WS2812", 尺寸基准写"普通蓝色 LED",
+//    两者驱动方式完全不同。现在都不用管了。
 
 /* =====================================================================
    通用模块
@@ -297,7 +462,7 @@ module base_tray() {
     }
     // --- 内部特征: 一律从 z=WALL-1 起长, 往底板里埋 1mm 实体互穿 ---
     Z0 = WALL - 1;
-    // 角螺柱: 顶面让开止口环底面(15), 柱身嵌进两侧内壁
+    // 角螺柱: 顶面 19.8, 让开止口环底面(20), 柱身嵌进两侧内壁
     for (p = BASE_BOSS) translate([p[0], p[1], Z0])
         boss_top(TRAY_H - LIP_T - BOSS_CLR - Z0, CORNER_OD);
 
@@ -333,9 +498,24 @@ module base_top() {
                 translate([-LIP_IN_X, -LIP_IN_Y, -1])
                     cube([2*LIP_IN_X, 2*LIP_IN_Y, LIP_T + 3]);
             }
+            // 按键帽导向凸台 (背面): 把沉孔从 1.5 加深到 4.0。
+            // 帽子露出盖面 5mm, 导向段越长越不晃 —— 靠面板那 1.5mm 是不够的。
+            // 凸台底面 z=19.5(绝对), 开关顶面 17.6 -> 让开 1.9mm ✓
+            for (b = BTN_POS) translate([b[0], b[1], -BTN_GUIDE_H])
+                cylinder(d = BTN_GUIDE_D, h = BTN_GUIDE_H + 0.01);
         }
-        // 按键孔
-        for (b = BTN_POS) translate([b[0], b[1], -4]) cylinder(d = BTN_D, h = TOP_T + 8);
+        // 按键: 通孔 φ9 (帽柄) + 背面沉孔 φ12.5 深 4.0 (帽法兰, 防脱兼导向)
+        for (b = BTN_POS) translate([b[0], b[1], 0]) {
+            translate([0, 0, -BTN_GUIDE_H - 1])
+                cylinder(d = BTN_CB_D, h = BTN_GUIDE_H + BTN_CB_T + 1);
+            translate([0, 0, -BTN_GUIDE_H - 2])
+                cylinder(d = BTN_D, h = TOP_T + BTN_GUIDE_H + 3);
+        }
+        // TP4056 充电指示灯观察孔 (长圆窗)。⚠ LED 具体位置未实测, 见参数区注释
+        hull() for (s = [-1, 1])
+            translate([LED_WIN_POS[0] + s*(LED_WIN_L - LED_WIN_W)/2,
+                       LED_WIN_POS[1], -LIP_T - 1])
+                cylinder(d = LED_WIN_W, h = TOP_T + LIP_T + 2);
         // 走线孔 (与闸体底板对齐)
         translate([HS_X_ABS + WIRE_P[0], WIRE_P[1], -4]) cylinder(d = WIRE_D, h = TOP_T + 8);
         // 角螺丝沉头孔: 这 4 点在止口环正下方, 板厚 = TOP_T + LIP_T = 5
@@ -362,8 +542,8 @@ module housing_shell() {
             difference() {
                 union() {
                     rbox(HS_L, HS_W, HS_H, HS_R);
-                    // 尾部外凸包已删除: 电机前端面定在 y=-12.5, 26mm 长的尾端
-                    // 只到 y=+13.5, 离 +Y 内壁(21)还有 7.5mm, 不需要让位
+                    // 尾部外凸包已删除: 电机前端面在 y=-11, 25.2mm 长的尾端
+                    // 只到 y=+14.2, 离 +Y 内壁(21)还有 6.8mm, 不需要让位
                     stop_rib();
                 }
                 // 内腔: 底板 2mm + 顶盖 2mm 都保留
@@ -371,13 +551,15 @@ module housing_shell() {
                     rbox(HS_L - 2*WALL, HS_W - 2*WALL, HS_H - 2*WALL, HS_R - 0.6);
                 // 走线孔 (穿底板)
                 translate([WIRE_P[0], WIRE_P[1], -1]) cylinder(d = WIRE_D, h = WALL + 2);
-                // 轴颈孔 (-Y 壁)
-                translate([0, -HS_W/2 - 1, PIV_Z]) rotate([-90, 0, 0])
-                    cylinder(d = HUB_J_D + 2*GAP, h = WALL + 2);
-                // 麦克风格栅 (-X 面, 朝使用者, 全部落在 -Y 半壳)
+                // 麦克风: 格栅孔 + 内侧圆窝 (窝深 1.2, 壁上还剩 0.8 给格栅)
                 for (i = [0 : 3])
-                    translate([-HS_L/2 - 1, -13 + i*3.5, MIC_Z]) rotate([0, 90, 0])
+                    translate([-HS_L/2 - 1, MIC_Y - 5.25 + i*3.5, MIC_Z]) rotate([0, 90, 0])
                         cylinder(d = 1.8, h = WALL + 2);
+                mic_pocket();
+                // 凸轮顶丝的进入孔 (前面板)。闸杆在落杆位(0°)时顶丝正对这里,
+                // 长柄小螺丝刀直接捅进来拧 —— 顶丝是径向的, 从分模面伸手够不着。
+                translate([-HS_L/2 - 1, (CAM_Z0 + CAM_Z1)/2 + HUB_Y_ABS, PIV_Z])
+                    rotate([0, 90, 0]) cylinder(d = 3.0, h = WALL + 2);
             }
             // --- 实体特征 (不带孔) ---
             if (FEAT) {
@@ -386,7 +568,9 @@ module housing_shell() {
                 if (F2) for (p = HS_JOIN)
                     translate([p[0], 0, p[1]]) rotate([90, 0, 0]) cylinder(d = BOSS_OD, h = 9);
                 if (F3) motor_seat();
-                if (F4) switch_plate();
+                if (F4) for (a = SW_ANG) switch_pad(a);
+                pivot_boss();
+                mic_tabs();
             }
         }
         // --- 最后统一开孔, 保证贯穿所有材料 ---
@@ -396,8 +580,42 @@ module housing_shell() {
             if (F2) for (p = HS_JOIN)
                 translate([p[0], 1, p[1]]) rotate([90, 0, 0])
                     cylinder(d = BOSS_PILOT, h = 9.5);
-            if (F4) switch_holes();
+            if (F4) for (a = SW_ANG) switch_pilots(a);
         }
+        // 轴颈孔: 必须在**最后**开 —— 它要一次穿透 -Y 壁和后加的轴承凸台。
+        // 放进上面那层 difference 的话, pivot_boss 会把它重新填实(README 坑 #2)。
+        translate([0, -HS_W/2 - 1, PIV_Z]) rotate([-90, 0, 0])
+            cylinder(d = HUB_J_D + 2*GAP, h = WALL + 2 + WALL_BOSS_L);
+    }
+}
+
+// 轴承凸台: 壁只有 2mm 厚, φ8.5 孔的轴承长度就只有 2mm, 而闸杆是从壁外
+// 悬伸的 —— 轴会在孔里晃。内侧加一圈 φ12×4 的凸台, 轴承长度做到 6mm。
+// (这是原设计就有的隐患, 不是拆件带来的。)
+module pivot_boss()
+    translate([0, YIN - 1, PIV_Z]) rotate([-90, 0, 0])
+        cylinder(d = WALL_BOSS_D, h = WALL_BOSS_L + 1);
+
+// 麦克风圆窝: 从内壁面往外挖 MIC_POCKET_T, 壁上留 0.8mm 给格栅孔
+module mic_pocket()
+    translate([-HS_L/2 + WALL, MIC_Y, MIC_Z]) rotate([0, -90, 0])
+        cylinder(d = MIC_POCKET_D, h = MIC_POCKET_T);
+
+// 麦克风压舌 ×2: 上下各一片, 死的(不靠塑料弹性)。
+// 下压舌盖 1.2、上压舌只盖 0.6 —— 窝比板大 0.7(半径), 装配时把板往下压到底
+// 就能让上边越过 0.6 的覆盖量, 松手后板落回中间, 两边都咬住。
+module mic_tabs() {
+    R  = MIC_POCKET_D/2;
+    X0 = -HS_L/2 + WALL;
+    for (s = [1, -1]) {
+        over = (s > 0) ? MIC_TAB_UP : MIC_TAB_LO;
+        // 根部: 长在窝口以外的实心壁上, 埋进去 1.5mm 实体互穿
+        translate([X0 - 1.5, MIC_Y - MIC_TAB_W/2, MIC_Z + s*R + (s > 0 ? 0 : -3)])
+            cube([MIC_TAB_T + 1.5, MIC_TAB_W, 3]);
+        // 压舌本体: x 只从 -21.2 起 —— 圆板前表面在 -21.2, 再往里就顶住板了
+        translate([X0 - 0.2, MIC_Y - MIC_TAB_W/2,
+                   (s > 0) ? MIC_Z + R - over : MIC_Z - R - 0.5])
+            cube([MIC_TAB_T + 0.2, MIC_TAB_W, over + 0.5]);
     }
 }
 
@@ -452,12 +670,12 @@ module stop_rib() {
 
    固定方式 = 轴向推入 + 合壳夹紧:
      1. 电机从分模面(y=0)沿 -Y 推进左壳的半条隧道, 直到尾端顶住尾挡筋;
-     2. 右壳扣上, 另外半条隧道合拢, 26mm 长的矩形配合把电机箍住;
-     3. 矩形截面本身就防转 —— N20 靠这个受扭, 不需要额外螺丝(N20 机身也
-        没有安装孔)。
-   为什么**没有前端挡肩**: 减速箱端面在 y=-12.5, 而凸轮占 y=-19..-13,
+     2. 右壳扣上, 另外半条隧道合拢, 25.2mm 长的矩形配合把电机箍住;
+     3. 矩形截面本身就防转 —— N20 靠这个受扭。减速箱端面**其实有 2×M1.6
+        螺孔**(实测), 但矩形隧道夹紧已经够用, 那两个孔留作日后加固。
+   为什么**没有前端挡肩**: 减速箱端面在 y=-11, 而凸轮占 y=-16.5..-11.5,
    任何挡肩都要伸到半径 7.8mm 以内才能挡住端面, 那里已经被凸轮占了。
-   电机往 -Y 的位移由轴插进转毂孔的深度限住(轴 9mm / 孔 10.5mm, 余 1.5mm)。 */
+   电机往 -Y 的位移由轴插进转毂孔的深度限住(轴 10mm / 孔 10.5mm, 余 0.5mm)。 */
 module motor_seat() {
     PW    = MOT_W + 2*MOT_CLR;              // 10.8
     PH    = MOT_H + 2*MOT_CLR;              // 12.8
@@ -474,28 +692,38 @@ module motor_seat() {
     }
 }
 
-SW_HOLES = [[ SW_HOLE_R, -SW_SPACING/2], [ SW_HOLE_R,  SW_SPACING/2],
-            [-SW_SPACING/2, SW_HOLE_R],  [ SW_SPACING/2, SW_HOLE_R]];
+YIN = -HS_W/2 + WALL;    // -Y 内壁面 = -21
 
-// 微动开关托板: 3.5mm 实心板整块贴 -Y 内壁, 开关直接拧在板上。
-// 不用凸起螺柱 —— 凸柱会把开关顶出凸轮的 Y 覆盖范围(凸轮只有 y=-19..-13 这 6mm)。
-YIN = -HS_W/2 + WALL;
+/* 微动开关安装台 (v3.0 重做)。
 
-module switch_plate() {
-    // 往壁里埋 1.2mm, 实体互穿而不是贴面
-    translate([-SW_HOLE_R - 5, YIN - 1.2, PIV_Z - SW_HOLE_R - 5])
-        cube([2*SW_HOLE_R + 10, 4.7, 2*SW_HOLE_R + 10]);
-}
+   v2.6 是一整块 (2R+10) 见方的托板贴在 -Y 内壁上。SW_HOLE_R 从 12.5 提到
+   实测该有的 14.6 之后, 那块板的底面 = PIV_Z - R - 5 = -2.6, **从闸体地板
+   捅出去了**。而 R 又不能缩 —— 缩了开关本体就撞凸轮。
+   两个约束打架的根子是"托板是一整块": 中间和下方那些料根本没用。
+   拆成两块只包住各自两个安装孔的小安装台, 约束就解开了。
 
-module switch_holes() {
-    // 让开凸轮和轴颈
-    translate([0, YIN - 2, PIV_Z]) rotate([-90, 0, 0])
-        cylinder(d = CAM_LOBE_D + 2, h = 14);
-    // 4 个 M2 自攻底孔 (贯穿托板)
-    for (q = SW_HOLES)
-        translate([q[0], YIN + 4, PIV_Z + q[1]]) rotate([90, 0, 0])
-            cylinder(d = BOSS_PILOT, h = 6);
-}
+   坐标系 at_sw(a): 局部 +x = 径向朝外, +y = 切向, +z = 装配 +Y(轴向)。
+   a=0 -> 落杆位那只(朝 +X), a=90 -> 起杆位那只(朝 +Z)。                    */
+module at_sw(a)
+    translate([0, 0, PIV_Z]) rotate([-90, 0, 0]) rotate([0, 0, -a]) children();
+
+module switch_pad(a) at_sw(a)
+    translate([SW_PAD_R0, -SW_PAD_W/2, YIN - 1.2])   // 往壁里埋 1.2 实体互穿
+        cube([SW_PAD_R1 - SW_PAD_R0, SW_PAD_W, SW_PAD_T]);
+
+/* 安装底孔: **径向长圆孔**, ±1.5 可调。
+   规格书只给了 FP 的 Max 没给 Min, 实物 FP 偏小的话本体会更靠近轴心、
+   撞上凸起。装配时把开关滑到"凸起刚好压下、基圆刚好释放"再拧紧。
+
+   ⚠ 宽度取 BOSS_PILOT(1.7) 而不是文档写的 φ2.2: 2.2 是开关本体上那两个
+     **过孔**的直径, 板这边是要给 M2 自攻**咬**的, 开到 2.2 就没料可咬了。
+     长圆孔里螺纹只咬两条长边, 咬合面积少一半左右, 对 56gf 的开关够用。
+   ⚠ 深 4.5 不打穿: 外壁留 1mm, 表面看不到孔。                             */
+module switch_pilots(a) at_sw(a)
+    for (t = [-1, 1]) translate([0, t*SW_SPACING/2, 0])
+        hull() for (dr = [-SW_SLOT/2, SW_SLOT/2])
+            translate([SW_HOLE_R + dr, 0, YIN - 1.2 + SW_PAD_T - SW_PILOT_D])
+                cylinder(d = BOSS_PILOT, h = SW_PILOT_D + 0.6);
 
 module house_l() {
     difference() {
@@ -528,9 +756,17 @@ module house_r() {
 }
 
 /* =====================================================================
-   4. 转毂 (轴套 + 凸轮 + 闸杆夹, 一件三用)
+   4. 转毂 hub (夹杆臂 + 轴颈 + 电机 D 形孔)
       本地 Z 轴 = 装配后的 Y 轴
-      0..12 夹块 | 12..16 轴颈 | 16..22 凸轮
+      0..11 夹块 | 11..23.5 轴颈 (13.5..23.5 段里面是电机 D 形孔)
+
+      v3.0: **凸轮拆成独立零件 cam**。
+      不是为了电机固定, 是因为闸体 -Y 壁上的轴颈孔只有 φ8.5, 而一整件转毂
+      两端 (夹杆臂 36×14 / 凸轮 φ18.6) 都远大于它, **物理上穿不过去**;
+      分模面在 y=0, 这道壁整个属于左壳, 拆开左右壳也分不开它。
+      这类"装配路径"问题布尔自检抓不到 —— t=16 早就验过终态不干涉。
+      拆凸轮而不是拆臂: 凸轮几乎不受力(只拨开关), 闸杆弯矩和电机扭矩
+      全部走主体这一整件。
    ===================================================================== */
 module hub() {
     difference() {
@@ -539,16 +775,16 @@ module hub() {
             cylinder(d = HUB_D, h = HUB_CLAMP_H);
             translate([HUB_ARM_X0, -HUB_ARM_W/2, 0])
                 cube([HUB_ARM_X1 - HUB_ARM_X0, HUB_ARM_W, HUB_CLAMP_H]);
-            // 轴颈 (穿闸体 -Y 壁)
+            // 轴颈: 穿闸体 -Y 壁和轴承凸台, 一直做到末端托住凸轮盘
             translate([0, 0, HUB_J_Z0])
                 cylinder(d = HUB_J_D - 2*GAP, h = HUB_J_Z1 - HUB_J_Z0);
-            // 凸轮
-            translate([0, 0, HUB_J_Z1]) cylinder(d = CAM_BASE_D, h = 6);
-            translate([0, 0, HUB_J_Z1]) rotate([0, 0, -CAM_ARC/2])
-                rotate_extrude(angle = CAM_ARC)
-                    translate([CAM_BASE_D/2 - 0.01, 0])
-                        square([(CAM_LOBE_D - CAM_BASE_D)/2 + 0.01, 6]);
         }
+        // 键面: 只切凸轮段。凸轮靠它定角度(不靠顶丝拧到某个角度去猜时序),
+        // 顶丝顶在这个面上只负责轴向锁死。穿壁那段保持整圆当轴承面。
+        translate([-HUB_J_D, -HUB_J_D, CAM_FLAT_Z0])
+            cube([HUB_J_D - CAM_FLAT, 2*HUB_J_D, HUB_J_Z1 - CAM_FLAT_Z0 + 1]);
+        // 末端锪坑, 让开电机的 φ4×0.7 轴根凸台
+        translate([0, 0, HUB_J_Z1 - HUB_CB_L]) cylinder(d = HUB_CB_D, h = HUB_CB_L + 1);
         // --- 闸杆插槽 ---
         // 局部 Y 吃闸杆的"高"(8), 局部 Z 吃闸杆的"宽"(5) => 装配后窄面朝下。
         // 从 +X 端开口, 杆根面停在转轴 x=0, 插入深度 = HUB_ARM_X1 = 20mm。
@@ -564,11 +800,55 @@ module hub() {
         // 孔比轴还大一圈, D 形面根本没被包住, 轴插进去空转。
         // D 形孔的正确做法是 圆 **交** 半空间: 把圆切掉一块平面。
         translate([0, 0, BORE_Z0]) d_bore(BORE_Z1 - BORE_Z0);
-        // 顶丝 (M2, 顶在 D 形平面上; 扭矩靠 D 面传, 顶丝只防轴向窜出)
-        translate([0, 0, SETSCREW_Z]) rotate([90, 0, 0])
-            cylinder(d = BOSS_PILOT, h = 20, center = true);
+        // v2.6 那颗顶在 D 面上的 M2 顶丝**删掉了**: 它落在局部 z=19, 正好是
+        // 凸轮盘现在坐的位置, 而且轴颈壁只有 2.1mm, 咬不住。
+        // 转毂的轴向固定改由几何夹出来: 往 -Y 拔 -> 凸轮撞轴承凸台;
+        // 往 +Y 推 -> 夹杆臂撞外壁(只有 1mm 行程)。凸轮自己由顶丝锁在轴颈上。
         // 配重仓 (M5 钢螺母, 平躺): 从 -X 端开口塞进去再点胶, 不再是封死的空腔
         translate([HUB_ARM_X0 - 1, -5, 2]) cube([10, 10, HUB_CLAMP_H - 4]);
+    }
+}
+
+/* =====================================================================
+   4b. 凸轮盘 cam (v3.0 新增, 从腔内套上轴颈)
+
+   廓形 = 基圆 r6 + 顶部 r9.3 平段 CAM_ARC + **两侧各 CAM_RAMP 的过渡斜坡**。
+   v2.6 是 rotate_extrude 出来的直上直下台阶 —— 3.3mm 的垂直墙, 直杆压柄
+   撞上去只会顶死, 不会骑上去。
+   凸起总张角 25+2*18 = 61° < 90°, 所以转到另一只开关时这只已经完全释放。
+   ⚠ 压力角约 54° 偏陡(3.3mm 升程摊在 r≈7.65 处 2.4mm 的弧长上)。簧片杠杆
+     吃得住; 万一实测卡滞, 把 CAM_RAMP 加到 30 (总张角 85 仍 < 90)。
+   ===================================================================== */
+function cam_r(a) =
+    let (h = abs(((a + 180) % 360) - 180))          // 折算到 0..180
+        h <= CAM_ARC/2               ? CAM_LOBE_D/2 :
+        h <= CAM_ARC/2 + CAM_RAMP    ? CAM_BASE_D/2 + (CAM_LOBE_D - CAM_BASE_D)/2
+                                       * (1 - (h - CAM_ARC/2)/CAM_RAMP)
+                                     : CAM_BASE_D/2;
+
+module cam_profile()
+    polygon([for (a = [0 : 2 : 358]) [cam_r(a)*cos(a), cam_r(a)*sin(a)]]);
+
+// 顶丝凸台: 长在凸起的**正背面**。转毂 0~90° 全程里, 凸起扫 +X/+Z 象限
+// (两只开关在那儿), 凸台就永远扫 -X/-Z 象限 —— 那边是空的, 不会打架。
+module cam_ss_boss()
+    hull() {
+        circle(d = CAM_BASE_D);
+        translate([-(CAM_SS_R - 3), 0]) circle(r = 3);
+    }
+
+module cam() {
+    BORE = HUB_J_D - 2*GAP + CAM_BORE_CLR;        // 7.7
+    difference() {
+        linear_extrude(CAM_T) union() { cam_profile(); cam_ss_boss(); }
+        // D 形孔: 与轴颈上的键面配合 -> 角度由几何定死, 不用装配时对时序
+        translate([0, 0, -1]) intersection() {
+            cylinder(d = BORE, h = CAM_T + 2);
+            translate([-CAM_FLAT - 0.15, -BORE, 0]) cube([BORE, 2*BORE, CAM_T + 2]);
+        }
+        // 顶丝底孔 (M2 自攻, 沿 -X 拧进来, 顶在键面上)
+        translate([-CAM_SS_R - 0.5, 0, CAM_T/2]) rotate([0, 90, 0])
+            cylinder(d = BOSS_PILOT, h = CAM_SS_R - CAM_FLAT + 0.5);
     }
 }
 
@@ -639,16 +919,25 @@ module rc_bottom() {
         rbox(RC_L, RC_W, RC_H - RC_TOP_T, RC_R);
         translate([0, 0, WALL])
             rbox(RC_L - 2*WALL, RC_W - 2*WALL, RC_H, RC_R - 0.6);
+        // Type-C (+X 端面)
         translate([RC_L/2 - WALL - 1, -USB_W/2, 5]) cube([WALL + 2, USB_W, USB_H]);
+        // 拨动开关拨柄开口 (v3.0 补。BOM 里本来就有 SS12D00, 是 CAD 漏了)
+        translate([RC_L/2 - WALL - 1, RC_PSW_Y - RC_PSW_W/2, RC_PSW_Z - RC_PSW_H/2])
+            cube([WALL + 2, RC_PSW_W, RC_PSW_H]);
     }
     // 内部特征 (在 difference 之外, 往底板埋 1mm)
     // 螺柱顶面同样要让开 rc_top 背面 2mm 止口
     for (p = RC_BOSS) translate([p[0], p[1], WALL - 1])
         boss_top(RC_H - RC_TOP_T - LIP_T - BOSS_CLR - (WALL - 1));
-    // C3 SuperMini 与 TP4056 之间的隔筋
-    translate([-1.5, -RC_W/2 + WALL, WALL - 1]) cube([3, RC_W - 2*WALL, 7]);
-    // 电池仓围挡 (502030 立放在一端)
-    translate([-RC_L/2 + WALL + 20, -RC_W/2 + WALL, WALL - 1]) cube([2.5, 10, 9]);
+    // 电池仓围挡: 502030 **含保护板 7×21×32** 卧放在 -X 半场,
+    // -X 与 ±Y 三面直接靠内壁, 只需要一条 +X 端挡边 + 两条 ±Y 侧挡边
+    translate([RC_BAT_X1, -RC_W/2 + WALL, WALL - 1])
+        cube([RC_RIB_T, RC_W - 2*WALL, RC_BAT_T + 2]);
+    for (s = [-1, 1])
+        translate([RC_BAT_X0 - 1, s > 0 ? RC_BAT_W/2 : -RC_W/2 + WALL, WALL - 1])
+            cube([RC_BAT_X1 - RC_BAT_X0 + 1, RC_W/2 - WALL - RC_BAT_W/2, RC_BAT_T + 2]);
+    // C3 SuperMini 与 TP4056 之间的隔筋 (在 +X 半场)
+    translate([RC_BAT_X1 + 10, -RC_W/2 + WALL, WALL - 1]) cube([3, RC_W - 2*WALL, 7]);
 }
 
 module rc_top() {
@@ -665,6 +954,26 @@ module rc_top() {
 }
 
 /* =====================================================================
+   6b. 按键帽 btn_cap ×2 (v3.0 新增)
+       下柄(锥) -> 法兰(卡在上盖背面沉孔里) -> 柄(穿 φ9 通孔, 露出 5mm)
+       下柄做成锥形是为了打印: 直接 φ8 接 φ12 是 2mm 的水平悬空。
+   ===================================================================== */
+module btn_cap() {
+    FL_Z = CAP_SEAT_Z - CAP_FLANGE_T - CAP_BOT_Z;    // 3.2 法兰底面
+    difference() {
+        union() {
+            cylinder(d1 = CAP_LOW_D, d2 = BTN_CB_D - CAP_CLR, h = FL_Z);
+            translate([0, 0, FL_Z])
+                cylinder(d = BTN_CB_D - CAP_CLR, h = CAP_FLANGE_T);
+            translate([0, 0, CAP_SEAT_Z - CAP_BOT_Z])
+                cylinder(d = BTN_D - CAP_CLR, h = CAP_TOP_Z - CAP_SEAT_Z);
+        }
+        // 套住顶杆的盲孔。留 CAP_FLOAT 浮动, 静止时不许预压开关
+        translate([0, 0, -0.01]) cylinder(d = CAP_BLIND_D, h = CAP_BLIND_L + 0.01);
+    }
+}
+
+/* =====================================================================
    7. 内部元件排布预览 (仅示意, 不导出)
    ===================================================================== */
 module part_block(sz, pos, col) {
@@ -672,7 +981,7 @@ module part_block(sz, pos, col) {
         cube(sz);
 }
 
-// 承载底板外形 (2D): -X 两角切 4×4 缺口让开角螺柱
+// 承载底板外形 (2D): -X 两角切 5×5 缺口让开角螺柱
 module pcb_outline() {
     difference() {
         translate([PCB_X0, -PCB_YH]) square([PCB_X1 - PCB_X0, 2*PCB_YH]);
@@ -682,50 +991,123 @@ module pcb_outline() {
     }
 }
 
-module layout() {
-    color("DimGray", 0.35) base_tray();
-    // 电池 103450 (+X 半场)
-    part_block([BAT_L, BAT_W, BAT_T], [(BAT_X0 + BAT_X1)/2, 0, WALL], "ForestGreen");
-    // 承载底板 (-X 半场)
+// 电池 (成品 51×34×10, +X 半场, 引线朝 -X)
+module battery()
+    part_block([BAT_L, BAT_W, BAT_T], [BAT_X0 + BAT_L/2, 0, WALL], "ForestGreen");
+
+// 承载底板 + 板上元件。**全部按 PCB 定稿坐标摆 (机械约束 §七之二), 不是示意位置。**
+// 谁改了这里, 先去改那张表, 再改这里 —— 那张表是唯一事实源。
+module pcb_stack() {
     color("DarkGreen", 0.9) translate([0, 0, WALL + PCB_SO])
         linear_extrude(PCB_T) pcb_outline();
-    PZ = WALL + PCB_SO + PCB_T;      // 板面 z = 5.6
-    // U1 DevKitC-1 (63×25.5) 偏置到 -Y 侧, 给按键让出 y>2 的整条带
-    part_block([63, 25.5, U1_STACK], [-15.5, -10.75, PZ], "SteelBlue");
-    // U3 TP4056 (26×17): Type-C 悬出板前沿 2mm 顶到前端面开口
-    part_block([26, 17, 4.8], [-60, 0, PZ], "Goldenrod");
-    // SW3 总开关
-    part_block([8, 6, 6], [-67, PSW_Y, PZ], "Silver");
-    // SW1/SW2 轻触 6×6×12, 顶杆伸进上盖 φ6.5 孔
-    for (b = BTN_POS) part_block([6, 6, 12], [b[0], b[1], PZ], "Crimson");
-    // U2 DRV8833 / U4 升压 / LS1 蜂鸣器 (都挤在 y>2 那条带里)
-    part_block([23, 14, 6.1], [8, 14, PZ], "IndianRed");
-    part_block([17, 11, 6.1], [-57, 16, PZ], "MediumPurple");
-    color("DarkOrange", 0.85) translate([-5, 8, PZ]) cylinder(d = 9, h = 5.5);
-    // 天花板: 中央净空区上限 z=17, 止口环下方只有 15
-    color("Red", 0.25) translate([-LIP_IN_X, -LIP_IN_Y, TRAY_H - 0.2])
+    PZ = PCB_Z;                      // 板面 z = 5.6
+    part_block([63.6, 27.9, U1_STACK], [-16, -8, PZ], "SteelBlue");   // U1 DevKit (rot 270)
+    part_block([28, 17, 4.8],   [-74.2, -6,   PZ], "Goldenrod");      // U3 TP4056
+    part_block([4.4, 8.7, 4.4], [-82.6, 17,   PZ], "Silver");         // SW3 拨动 (rot 270)
+    part_block([37, 17, 7],     [-60,   23.5, PZ], "MediumPurple");   // U4 MT3608
+    part_block([11.4, 7.6, 9.5],[-58,   10,   PZ], "Tan");            // J2 限位
+    part_block([18.1, 21.1, 12.5], [-31, 20,  PZ], "IndianRed");      // U2 DRV8833
+    part_block([7.6, 7.6, 9.5], [-13,   18,   PZ], "Tan");            // J1 电机
+    part_block([12.7, 7.6, 9.5],[ 22,    9,   PZ], "Tan");            // J3 麦克风
+    part_block([7.6, 7.6, 9.5], [ 24,  -10,   PZ], "Tan");            // J4 电池
+    for (b = BTN_POS) part_block([6, 6, BTN_SW_H], [b[0], b[1], PZ], "Crimson");
+    color("DarkOrange", 0.85) translate([-46, 10, PZ]) cylinder(d = 5,   h = 11);  // C3
+    color("DarkOrange", 0.85) translate([-17.5, 28, PZ]) cylinder(d = 6.3, h = 11);// C1
+    color("Khaki", 0.85)      translate([7, -27.2, PZ]) cylinder(d = 9,   h = 5.5);// LS1
+}
+
+module layout() {
+    color("DimGray", 0.35) base_tray();
+    battery();
+    pcb_stack();
+    // 按键帽 (装在上盖上, 这里画出来看行程)
+    color("Crimson", 0.6) for (b = BTN_POS) translate([b[0], b[1], CAP_BOT_Z]) btn_cap();
+    // 天花板: 中央净空区上限 z=TRAY_H, 止口环下方少 2mm
+    color("Red", 0.2) translate([-LIP_IN_X, -LIP_IN_Y, TRAY_H - 0.2])
         cube([2*LIP_IN_X, 2*LIP_IN_Y, 0.2]);
-    // 走线孔位置提示 (落在电池上方 5mm 空隙里)
+    // 走线孔位置提示
     color("Black", 0.5)
-        translate([HS_X_ABS + WIRE_P[0], WIRE_P[1], WALL]) cylinder(d = WIRE_D, h = 15);
+        translate([HS_X_ABS + WIRE_P[0], WIRE_P[1], WALL]) cylinder(d = WIRE_D, h = 18);
 }
 
 /* =====================================================================
-   8. 装配预览
+   8. 装配预览 / 爆炸图
+
+   同一个 assembly() 出两种图, 靠 EXP 这个系数:
+     EXP = 0   装配态 (p=0 或 part="assembly")
+     EXP = 1   完全炸开 (p=13 或 part="explode")
+     0 < EXP < 1  半程 —— 想做装配动画就扫这个值:
+       for /L %i in (0,5,100) do openscad -D EXP=%i/100.0 -D p=0 -o f%i.png daozha.scad
+
+   下面每个零件一条**炸开位移向量**, 乘以 EXP 用。方向不是随便挑的, 一律取
+   该零件**真实的装配方向**, 这样爆炸图同时就是装配顺序图:
+     · 上盖 / 按键帽 / 闸体   -> +Z   (自下而上叠)
+     · 左右壳                 -> ∓Y   (沿分模面掰开)
+     · 转毂 / 凸轮            -> -Y   (沿转轴轴向抽出, 凸轮先退、转毂后拔)
+     · 闸杆                   -> +X   (顺着插槽方向拔出)
+     · 电池                   -> -Y   (从仓里侧向取出)
    ===================================================================== */
+EXP = (sel == "explode") ? 1 : 0;
+GUIDE = true;      // 画引导线: 从零件的装配位置一直连到炸开后的位置
+
+// v = 炸开位移; anchor = 该零件在**装配态**下的一个代表点(画引导线用, 可省)
+module ex(v, anchor = undef) {
+    translate(EXP * v) children();
+    if (EXP > 0 && GUIDE && !is_undef(anchor))
+        color("Black", 0.30) hull() {
+            translate(anchor)             sphere(d = 1.2, $fn = 8);
+            translate(anchor + EXP * v)   sphere(d = 1.2, $fn = 8);
+        }
+}
+
+EX_PCB  = [  0,    0,  42];   // 承载底板连板上元件, 从托盘里整体抬起
+EX_BAT  = [  0,  -78,  26];   // 电池 (拉到托盘外面, 否则看着还在仓里)
+EX_TOP  = [  0,    0,  78];   // 上盖
+EX_CAP  = [  0,    0, 106];   // 按键帽 (在上盖之上, 因为是从背面装进去的)
+EX_HL   = [  0,  -42, 122];   // 闸体左壳
+EX_HR   = [  0,  +42, 122];   // 闸体右壳
+EX_CAM  = [  0,  -72, 122];   // 凸轮 (退到左壳外侧)
+EX_HUB  = [  0, -104, 122];   // 转毂 (再往外, 顺序 = 壳 -> 凸轮 -> 转毂)
+EX_BARA = [ 45, -104, 122];   // 闸杆根段 (跟着转毂走, 再沿 +X 拔出插槽)
+EX_BARB = [100, -104, 122];   // 闸杆末段
+EX_RCT  = [  0,    0,  32];   // 遥控器上盖
+
 module assembly() {
+    PIV = BASE_H + PIV_Z;                        // 转轴绝对高度 = 42
     color("DimGray")   base_tray();
-    color("Silver")    translate([0, 0, TRAY_H]) base_top();
-    color("Goldenrod") translate([HS_X_ABS, 0, BASE_H]) { house_l(); house_r(); }
-    color("SlateGray") translate([HS_X_ABS, -35, BASE_H + PIV_Z]) rotate([-90, 0, 0]) hub();
+    ex(EX_BAT,  [BAT_X0 + BAT_L/2, 0, WALL + BAT_T/2])
+                       battery();
+    ex(EX_PCB,  [(PCB_X0 + PCB_X1)/2, 0, PCB_Z])
+                       pcb_stack();
+    ex(EX_TOP,  [0, 0, TRAY_H + TOP_T/2])
+                       color("Silver") translate([0, 0, TRAY_H]) base_top();
+    for (b = BTN_POS)
+        ex(EX_CAP, [b[0], b[1], CAP_SEAT_Z])
+                       color("Crimson", 0.9) translate([b[0], b[1], CAP_BOT_Z]) btn_cap();
+    ex(EX_HL,   [HS_X_ABS, -HS_W/4, BASE_H + HS_H/2])
+                       color("Goldenrod") translate([HS_X_ABS, 0, BASE_H]) house_l();
+    ex(EX_HR,   [HS_X_ABS,  HS_W/4, BASE_H + HS_H/2])
+                       color("Goldenrod") translate([HS_X_ABS, 0, BASE_H]) house_r();
+    ex(EX_HUB,  [HS_X_ABS, HUB_Y_ABS + HUB_CLAMP_H/2, PIV])
+                       color("SlateGray")
+                           translate([HS_X_ABS, HUB_Y_ABS, PIV])
+                           rotate([-90, 0, 0]) hub();
+    ex(EX_CAM,  [HS_X_ABS, HUB_Y_ABS + CAM_Z0 + CAM_T/2, PIV])
+                       color("Sienna")
+                           translate([HS_X_ABS, HUB_Y_ABS, PIV])
+                           rotate([-90, 0, 0]) translate([0, 0, CAM_Z0]) cam();
     // 闸杆: 杆根落在转轴 x=HS_X_ABS 上, 8mm 高居中于转轴, 窄面朝下
-    color("Crimson")   translate([HS_X_ABS, BAR_Y_ABS, BASE_H + PIV_Z - BAR_H/2]) {
-                           bar_a();
-                           translate([BAR_A_BODY, 0, 0]) bar_b();
-                       }
+    ex(EX_BARA, [HS_X_ABS + BAR_A_BODY/2, BAR_Y_ABS, PIV])
+                       color("Crimson")
+                           translate([HS_X_ABS, BAR_Y_ABS, PIV - BAR_H/2]) bar_a();
+    ex(EX_BARB, [HS_X_ABS + BAR_A_BODY + BAR_B/2, BAR_Y_ABS, PIV])
+                       color("Crimson")
+                           translate([HS_X_ABS + BAR_A_BODY, BAR_Y_ABS,
+                                      PIV - BAR_H/2]) bar_b();
     color("DimGray")   translate([-150, 75, 0]) {
                            rc_bottom();
-                           translate([0, 0, RC_H - RC_TOP_T]) rc_top();
+                           ex(EX_RCT, [0, 0, RC_H - RC_TOP_T/2])
+                               translate([0, 0, RC_H - RC_TOP_T]) rc_top();
                        }
 }
 
@@ -743,3 +1125,6 @@ else if (sel == "bar_a")      bar_a();
 else if (sel == "bar_b")      bar_b();
 else if (sel == "rc_bottom")  rc_bottom();
 else if (sel == "rc_top")     rc_top();
+else if (sel == "cam")        cam();
+else if (sel == "btn_cap")    btn_cap();
+else if (sel == "explode")    assembly();   // 同一个 assembly(), 靠 EXP 撑开

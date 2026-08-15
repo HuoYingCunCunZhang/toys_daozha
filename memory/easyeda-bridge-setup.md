@@ -54,4 +54,17 @@ API 参考文档在该 Skill 的 `references/`（120+ 类）、`guide/`、`user-
 - 建封装时**不要重编焊盘号**，只把编号 N 的焊盘搬到目标位置 N，避免瞬时编号冲突。
 - 保存：原理图 `sch_Document.save()`，封装编辑器（documentType 4）用 `pcb_Document.save()`。
 
-**核心纪律**：元件放了、线画了、**API 也报成功**，网表仍可能是错的（历史上 82 根线静默只生成 78 根）。必须坐标比对逐条校验，不能靠看图，也不能信返回值。相关项目见 [[daozha-toy-scope]]。
+**2026-08-15 新增的坑（建遥控器工程时踩的）：**
+
+- 🔴 **网络标识（GND / 5V 这类 netflag 符号）放不进去**：`sch_PrimitiveComponent.create({libraryType:"2",...})` 放 `symbolType=18` 的符号**必定卡满 30 秒超时**（其余调用同时都正常，`1+1` 秒回）。推断是 EDA 弹了网络命名框在等点击。**绕法：重排版面让每条网络都能用普通导线连通且零交叉**，不依赖标识。
+- **找 netflag 要按符号类型过滤**：`lib_Symbol.search(key, undefined, undefined, 18, n, 1)`，`ELIB_SymbolType.NET_FLAG=18`、`NET_PORT=19`，**而且要传数字 18 不是字符串 "18"**（传字符串报 `Cannot read properties of undefined (reading 'facets')`）。不过滤的话搜 "VCC" 全是无关元件。GND=`029dc91398624049926195124347581a`、Power-5V=`8a04e22374494d55957a030ec33de1cb`，库 `0819f05c4eef4c71ace90d822a990e87`。
+- 🔴 **桥的 30 秒上限是按"一次 /execute"算的**，不是单个 API。一次塞十几个调用（尤其 `lib_Device.search`，很慢）就会整批超时、**前面已执行的部分却已经生效**。要么拆批，要么**跳过搜索直接构造 `{libraryType:"2", libraryUuid, uuid}`**。
+- **新建工程不会自动切过去**：`createProject` 返回的是 **uuid 字符串**（不是对象），且当前工程不变；要 `dmt_Project.openProject(uuid)`。列工程用 `getAllProjectsUuid(teamUuid)`，**不传 teamUuid 返回 0 条**。
+- 🔴 **新工程刚打开时没有任何文档处于激活状态**，此时调 `sch_PrimitiveComponent.create` 会**卡 30 秒超时**（症状与弹窗一模一样，容易误判）。先 `dmt_EditorControl.openDocument(原理图页 uuid)`，用 `dmt_Schematic.getCurrentSchematicInfo()` 确认不是 "none" 再动手。
+- **`sch_PrimitivePin.getAll()` 恒返回 0 条**，引脚要从元件对象上取：`(await comp.getAllPins())`。
+- **`getState_Line()` 读回的是按段展开的扁平数组**（每 4 个数一段 `x1,y1,x2,y2`），与 `create()` 传入的"分段数组"格式不同。写进去一条 3 折的折线，读回来是 3 段。
+- `sch_Net.getAllNetsName()` 同样返回**空**——不只是导线的 `getState_Net()`。
+- `lib_Footprint.get` / `lib_Footprint.copy` 对**系统库**封装都抛 `[object Object]`，几何读不出来。要核封装尺寸只能等元件落到 PCB 文档里再读焊盘坐标。
+
+**核心纪律**：元件放了、线画了、**API 也报成功**，网表仍可能是错的（历史上 82 根线静默只生成 78 根）。必须坐标比对逐条校验，不能靠看图，也不能信返回值。
+**阳性对照要放一个"差一点点"的**：遥控器那次用了个距真引脚仅 5 个单位的假引脚，确认它掉出网络——只放个远处的假点，证明不了工具在判别距离。相关项目见 [[daozha-toy-scope]]。

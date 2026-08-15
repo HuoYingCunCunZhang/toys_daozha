@@ -1,4 +1,4 @@
 - [用中文回答](respond-in-chinese.md) — 用户明确要求，优先于会话里的英文配置
 - [记忆存放位置](memory-lives-in-project.md) — 正文在项目 memory\，C 盘只留索引指针
-- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 元件已全部定案/PCB待做/CAD冻结v2.6/入口看项目 README/四条踩坑教训
+- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 主机PCB+CAD v3.0 完成/遥控器原理图完成/下一步遥控器PCB/入口看项目 README/九条踩坑教训
 - [嘉立创EDA 桥接环境](easyeda-bridge-setup.md) — Claude Code 可直接操作 EDA，已跑通，含端口与陷阱
