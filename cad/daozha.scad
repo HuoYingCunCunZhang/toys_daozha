@@ -225,7 +225,29 @@ HS_L = 46;  HS_W = 46;  HS_H = 62;  HS_R = 3;
 // 顺带也更像真道闸 —— 底座放大到 183 以后, 闸体待在 x=25 会把 +X 侧空出 43mm。
 // 代价: 上盖走线孔跟着挪到电池上方, 闸体来的飞线要贴电池顶面(有 10mm 空隙)
 //       往 -X 走到板子上。
-HS_X_ABS = 55;
+/* 🔴 v3.3: 闸杆方向从 +X 改成 **+Y**, 闸体绕 Z 转 +90°。
+   原来闸杆顺着底座长边(+X)伸出, 整机在 X 上拉到 183+300=483mm, 而且**不是道闸的样子**
+   —— 真道闸是机箱蹲在路边、杆子横跨路面。改成杆沿 +Y 伸出才对。
+   能改得动是因为两件事凑巧:
+     · 闸体平面是 46×46 **正方形**, 转 90° 占位不变, 不会新压住按键;
+     · 上盖的四个闸体固定孔 HS_BOSS=[[±15,±15]] 是**正方形阵列, 90° 映射到自身**,
+       上盖的孔一个都不用动。
+   闸体内部(电机隧道/凸轮/微动开关/顶丝孔)全在闸体局部系里, 跟着 at_house() 一起转。
+   ⚠ 真正要手工跟的是跨坐标系的东西: 上盖走线孔 WIRE_P、装配预览里的闸杆摆放。
+
+   HS_X_ABS 由边距反推, 不是挑的: **转轴不在闸体中心** —— 夹杆臂占局部 y −35…−24,
+   整个悬在闸体 −Y 面外侧(壳只到 −23)。转 +90° 后这段甩到局部 +X, 外沿落在
+   HS_X_ABS+35。要它离底座 +X 边(91.5) 留 5mm -> HS_X_ABS = 51.5。
+   此时闸体占 x 28.5…74.5, 离 x=20 那颗按键帽 φ12.5 沉孔的边(26.25) 还有 2.25mm。 */
+HS_X_ABS = 51.5;
+HS_ROT   = 90;    // 闸体绕 Z 的安装角。杆沿 +Y 伸出。
+
+// 闸体局部 -> 绝对: hvec 只转向量, hpt 再加平移
+function hvec(v) = [v[0]*cos(HS_ROT) - v[1]*sin(HS_ROT),
+                    v[0]*sin(HS_ROT) + v[1]*cos(HS_ROT), v[2]];
+function hpt(p)  = hvec(p) + [HS_X_ABS, 0, 0];
+module at_house() translate([HS_X_ABS, 0, 0]) rotate([0, 0, HS_ROT]) children();
+
 // 转轴离地 42 是锁定约束(用户小车最矮 50mm, 杆顶 46 必须低于它)。
 // PIV_Z 由它反推, 这样改 BASE_H 时转轴高度自动保持不变 —— 以前写死 22,
 // 一旦把底座加高就会连带把转轴顶上去, 违反锁定尺寸。
@@ -659,14 +681,14 @@ module base_top() {
             translate([LED_WIN_POS[0] + s*(LED_WIN_L - LED_WIN_W)/2,
                        LED_WIN_POS[1], -LIP_T - 1])
                 cylinder(d = LED_WIN_W, h = TOP_T + LIP_T + 2);
-        // 走线孔 (与闸体底板对齐)
-        translate([HS_X_ABS + WIRE_P[0], WIRE_P[1], -4]) cylinder(d = WIRE_D, h = TOP_T + 8);
+        // 走线孔 (与闸体底板对齐, 跟着闸体一起转)
+        translate(hpt([WIRE_P[0], WIRE_P[1], -4])) cylinder(d = WIRE_D, h = TOP_T + 8);
         // 角螺丝沉头孔: 这 4 点在止口环正下方, 板厚 = TOP_T + LIP_T = 5
         for (p = BASE_BOSS) translate([p[0], p[1], 0]) csk(TOP_T, LIP_T);
         // 闸体固定孔 (从盖板底面往上拧进闸体螺柱, 闸体外表面无螺丝)
         // 这 4 点落在止口环**以内**, 背面就是 3mm 面板, 沉窝在 z=0 —— 止口
         // 改成环以后再按 TOP_T+LIP_T 算, 沉窝就悬在空气里了。
-        for (p = HS_BOSS) translate([HS_X_ABS + p[0], p[1], TOP_T]) rotate([180, 0, 0])
+        for (p = HS_BOSS) translate(hpt([p[0], p[1], TOP_T])) rotate([180, 0, 0])
             csk(TOP_T);
     }
 }
@@ -1204,7 +1226,7 @@ module layout() {
         cube([2*LIP_IN_X, 2*LIP_IN_Y, 0.2]);
     // 走线孔位置提示
     color("Black", 0.5)
-        translate([HS_X_ABS + WIRE_P[0], WIRE_P[1], WALL]) cylinder(d = WIRE_D, h = 18);
+        translate(hpt([WIRE_P[0], WIRE_P[1], WALL])) cylinder(d = WIRE_D, h = 18);
 }
 
 /* =====================================================================
@@ -1261,26 +1283,28 @@ module assembly() {
     for (b = BTN_POS)
         ex(EX_CAP, [b[0], b[1], CAP_SEAT_Z])
                        color("Crimson", 0.9) translate([b[0], b[1], CAP_BOT_Z]) btn_cap();
-    ex(EX_HL,   [HS_X_ABS, -HS_W/4, BASE_H + HS_H/2])
-                       color("Goldenrod") translate([HS_X_ABS, 0, BASE_H]) house_l();
-    ex(EX_HR,   [HS_X_ABS,  HS_W/4, BASE_H + HS_H/2])
-                       color("Goldenrod") translate([HS_X_ABS, 0, BASE_H]) house_r();
-    ex(EX_HUB,  [HS_X_ABS, HUB_Y_ABS + HUB_CLAMP_H/2, PIV])
+    // 闸体一族全部走 at_house(): 局部坐标不变, 整体绕 Z 转 HS_ROT。
+    // 炸开位移和引导线锚点也一律过 hvec/hpt, 否则转了闸体、炸开方向还朝老方向。
+    ex(hvec(EX_HL),  hpt([0, -HS_W/4, BASE_H + HS_H/2]))
+                       color("Goldenrod") at_house() translate([0, 0, BASE_H]) house_l();
+    ex(hvec(EX_HR),  hpt([0,  HS_W/4, BASE_H + HS_H/2]))
+                       color("Goldenrod") at_house() translate([0, 0, BASE_H]) house_r();
+    ex(hvec(EX_HUB), hpt([0, HUB_Y_ABS + HUB_CLAMP_H/2, PIV]))
                        color("SlateGray")
-                           translate([HS_X_ABS, HUB_Y_ABS, PIV])
+                           at_house() translate([0, HUB_Y_ABS, PIV])
                            rotate([-90, 0, 0]) hub();
-    ex(EX_CAM,  [HS_X_ABS, HUB_Y_ABS + CAM_Z0 + CAM_T/2, PIV])
+    ex(hvec(EX_CAM), hpt([0, HUB_Y_ABS + CAM_Z0 + CAM_T/2, PIV]))
                        color("Sienna")
-                           translate([HS_X_ABS, HUB_Y_ABS, PIV])
+                           at_house() translate([0, HUB_Y_ABS, PIV])
                            rotate([-90, 0, 0]) translate([0, 0, CAM_Z0]) cam();
-    // 闸杆: 杆根落在转轴 x=HS_X_ABS 上, 8mm 高居中于转轴, 窄面朝下
-    ex(EX_BARA, [HS_X_ABS + BAR_A_BODY/2, BAR_Y_ABS, PIV])
+    // 闸杆: 杆根落在转轴上, 8mm 高居中于转轴, 窄面朝下。局部沿 +X 插, 转后沿 +Y 伸出。
+    ex(hvec(EX_BARA), hpt([BAR_A_BODY/2, BAR_Y_ABS, PIV]))
                        color("Crimson")
-                           translate([HS_X_ABS, BAR_Y_ABS, PIV - BAR_H/2]) bar_a();
-    ex(EX_BARB, [HS_X_ABS + BAR_A_BODY + BAR_B/2, BAR_Y_ABS, PIV])
+                           at_house() translate([0, BAR_Y_ABS, PIV - BAR_H/2]) bar_a();
+    ex(hvec(EX_BARB), hpt([BAR_A_BODY + BAR_B/2, BAR_Y_ABS, PIV]))
                        color("Crimson")
-                           translate([HS_X_ABS + BAR_A_BODY, BAR_Y_ABS,
-                                      PIV - BAR_H/2]) bar_b();
+                           at_house() translate([BAR_A_BODY, BAR_Y_ABS,
+                                                 PIV - BAR_H/2]) bar_b();
     color("DimGray")   translate([-150, 75, 0]) {
                            rc_bottom();
                            ex(EX_RCT, [0, 0, RC_H - RC_TOP_T/2])

@@ -302,11 +302,12 @@ if (t == 50) intersection() { translate([0,0,TRAY_H]) base_top();
 //     x=2..48, 整颗按键被闸体盖住。这类跨零件失配没有用例就永远抓不到。
 if (t == 53) intersection() {
     for (b = BTN_POS) translate([b[0], b[1], CAP_BOT_Z]) btn_cap();
-    translate([HS_X_ABS, 0, BASE_H]) union() { house_l(); house_r(); } }
+    at_house() translate([0, 0, BASE_H]) union() { house_l(); house_r(); } }
 // 54: 阳性对照 —— 把闸体放回 v2.6 的 x=25, 必须撞上按键帽 -> NON-EMPTY
 if (t == 54) intersection() {
     for (b = BTN_POS) translate([b[0], b[1], CAP_BOT_Z]) btn_cap();
-    translate([25, 0, BASE_H]) union() { house_l(); house_r(); } }
+    translate([25, 0, 0]) rotate([0, 0, HS_ROT])
+        translate([0, 0, BASE_H]) union() { house_l(); house_r(); } }
 // 51: 麦克风圆板 φ14×1 躺进圆窝 -> EMPTY
 if (t == 51) intersection() { house_l();
     translate([-HS_L/2 + WALL - MIC_POCKET_T + 0.05, MIC_Y, MIC_Z]) rotate([0,90,0])
