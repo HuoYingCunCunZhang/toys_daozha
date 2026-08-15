@@ -18,7 +18,7 @@ if (-not (Test-Path $out)) { New-Item -ItemType Directory -Path $out | Out-Null 
 # 用数字选择器 p=N，避开 PowerShell 向原生程序传引号的坑
 $map = @{ base_tray = 2; base_top = 3; house_l = 4; house_r = 5; hub = 6;
           bar_a = 7; bar_b = 8; rc_bottom = 9; rc_top = 10;
-          cam = 11; btn_cap = 12 }
+          cam = 11; btn_cap = 12; rc_btn_cap = 14 }
 
 foreach ($k in $map.Keys) {
     Write-Output "导出 $k ..."

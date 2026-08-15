@@ -62,7 +62,7 @@ part = "assembly";
 p = 0;
 PARTS = ["assembly", "layout", "base_tray", "base_top", "house_l",
          "house_r", "hub", "bar_a", "bar_b", "rc_bottom", "rc_top",
-         "cam", "btn_cap", "explode"];
+         "cam", "btn_cap", "explode", "rc_btn_cap"];
 sel = (p == 0) ? part : PARTS[p];
 
 $fn = 48;
@@ -118,10 +118,26 @@ BTN_GUIDE_H = 2.5;    // 背面再加的导向凸台高度 -> 沉孔总深 4.0
 BTN_GUIDE_D = 14.0;   // 导向凸台外径
 BTN_SW_H    = 12.0;   // 轻触开关总高 (6×6×12, 底座 3.5 + 柄 8.5)
 
-// 前端面开口。y 全部对准 PCB 上器件的实际坐标:
-//   U3 TP4056 的 Type-C 座中心 y=-6; SW3 拨柄中心 y=+17, 拨柄尖 x=-92.01
-//   (外壁面 -91.5, 即拨柄只露出 0.51mm —— 开口要开够大, 手指伸进去拨)
-USB_W = 10;  USB_H = 5;  USB_Z = 8;  USB_Y = -6;
+/* 前端面开口。y 全部对准 PCB 上器件的实际坐标 (2026-08-15 从 EDA 复核过):
+     U3 TP4056 在 (-74.8, -6), 本体前沿(Type-C 座口) x = -88.23
+     SW3 拨动开关在 (-84.1, +17), 拨柄尖 x = -93.51
+
+   🔴 USB 开口必须按**插头的塑料头**开, 不是按金属壳开。
+   沿 -X 数过去: 外壁面 -91.5 / 内壁面 -89.5 / 板边 -88 / 座口 -88.23,
+   **从外壁面到座口有 3.27mm 死区**。Type-C 完全插入时塑料头前端面基本贴住座口,
+   所以这 3.27mm 得由塑料头自己穿过去 —— 开口小于塑料头, 插头就顶在外壁上,
+   金属壳只能进 6.5 - 3.27 = 3.2mm, 大约一半, 根本接触不上。
+   原来 USB_W=10 / USB_H=5 是照金属壳 (8.34 x 2.56) 开的, 塑料头过不去。
+   ⚠ 机械约束 §287 曾写"穿 2mm 壁 + 1.7mm 间隙仍插得到底"—— 那句话的算术不成立,
+     它只比了"插头长度 > 死区", 漏了塑料头也得跟着进去。
+   用户实测线材塑料头 **11 x 6.5**, 四周各留 0.75 余量 -> 12.5 x 8.0。   */
+USB_W = 12.5;  USB_H = 8.0;  USB_Z = 8.5;  USB_Y = -6;
+
+/* 拨柄开口。拨柄尖 -93.51, 外壁面 -91.5 -> 露出 **2.01mm**。
+   ⚠ 判据是尺寸基准 §366 定的"外壁面再露 1mm 手指才拨得动"。
+     SW3 原在 x=-82.6 时拨柄尖 -92.01, 只露 0.51mm, **不达标** ——
+     那张 H 选型表是按老底座(外壁面 -75/板边 -71)算的, 底座放大到 183 后没人回头重算。
+     因为物料已买齐(H=7 换不了), 改成把 SW3 在 PCB 上往 -X 挪 1.5mm 补回来。 */
 PSW_W = 8;   PSW_H = 4;  PSW_Y = 17;
 
 // 上盖 TP4056 充电指示灯观察孔。U3 在 (-74.8, -6), 本体 28×17 占 x -88.2..-60.2。
@@ -156,7 +172,13 @@ PCB_X0    = -88;  PCB_X1 = 32;   // 120 长
 PCB_YH    = 32.5;                // ±32.5 -> 65 宽
 PCB_T     = 1.6;
 PCB_SO    = 2.0;                 // 支撑柱净高 -> 板底 z=4, 板面 z=5.6
-PCB_NOTCH = 5;                   // -X 两角让开角螺柱的 5×5 缺口
+/* 🔴 -X 两角是 **45° 倒角**, 不是方形缺口。
+   2026-08-15 从 EDA 读回真实板框才发现 CAD 一直建成方缺口 ——
+   方缺口挖掉的料**更多**, 所以自检一直显示"没问题", **CAD 在偏乐观的方向错了**。
+   按真实倒角算: 角螺柱中心 (-87,32) 到倒角斜边只有 2.47mm, 而螺柱半径 3.0
+   -> 板子啃进螺柱 0.53mm, 装不进去。
+   倒角要 ≥6.2 才让得开, 取 7 -> 净距 0.89mm。已确认新增挖除区内没有任何铜。 */
+PCB_CHAMFER = 7;
 PCB_MNT   = [[-82, 27], [-82, -27], [26, 27], [26, -27]];
 PCB_Z     = WALL + PCB_SO + PCB_T;   // 板面 z = 5.6
 // 板面以上可用高度 = TRAY_H - 5.6 = 16.4mm (中央区); 见机械约束 §三
@@ -287,10 +309,26 @@ MIC_TAB_UP   = 0.6;           // 上压舌覆盖量 (必须 < 径向余隙 0.7, 
 MOT_W    = 10.0;   // 截面宽 (装配 X 向)
 MOT_H    = 12.0;   // 截面高 (装配 Z 向)
 MOT_L    = 25.2;   // 机身总长 = 减速箱 9 + 电机 15 + 尾盖 1.2  (实测, 原写 26)
-MOT_CLR  = 0.4;    // 电机四周配合间隙
+MOT_CLR  = 0.4;    // 电机四周配合间隙 (滑配, 保证插得进)
+
+/* --- 压筋 (crush rib), v3.2 新增 -------------------------------------------
+   🔴 光靠 10×12 的矩形截面防转是**不够**的: 身子 10×12 插在 10.8×12.8 的孔里,
+      单边 0.4 间隙 -> 电机能绕自身轴转 **3.94°**, 折到 300mm 杆尖就是 **20.6mm**
+      的旷量, 起落换向时肉眼可见。而原注释写的"合壳夹紧"其实**没有夹紧动作**:
+      四道立筋各自是完整方孔, 电机是穿过去的, 合壳只是把后两个孔套上。
+   ⚠ 不能靠把 MOT_CLR 调小解决 —— FDM 公差 ±0.15, 调到 0.1 可能根本插不进去。
+   压筋的意义就是**把公差问题变成塑性变形问题**: 立式圆柱在隧道侧壁凸出一点点,
+   电机推进去时把它蹭平, 间隙被吃掉, 而且电机仍然可拆(比热熔胶强在这儿)。
+   只做 X 两侧: 10 那条边一旦被夹死, 12 那条边的间隙就转不动了(见自检 t=88/89)。
+   两道分别落在左壳(y=-9)和右壳(y=+7.9), 各夹一半, 合壳时不会互相别劲。      */
+CRUSH_R   = 1.0;    // 压筋圆柱半径 —— 圆柱是**线接触**, 插入力比方筋小得多
+CRUSH_INT = 0.15;   // 单边过盈量 (被蹭掉的量)
 // 减速箱前端面 Y。由凸轮反推: 凸轮占 -16.5..-11.5, 留 0.5 间隙 -> -11.0。
 // 尾端到 -11+25.2 = +14.2, 离 +Y 内壁(21) 还有 6.8mm ✓
 MOT_Y0   = -11.0;
+// ⚠ 这行必须排在 MOT_Y0 之后: OpenSCAD 引用"后面才赋值的变量"拿到的是 undef,
+//   不报错、只刷警告, 压筋会被摆到未定义的位置 —— 自检 t=89 就是这么红的。
+CRUSH_Y   = [MOT_Y0 + 2, MOT_Y0 + MOT_L*0.75];   // 落在第 1 和第 3 道立筋上
 // 轴根凸台: 减速箱端面上 φ4 凸出 0.7, 转毂端面必须让开它 (v3.0 新增)
 MOT_HUBB_D = 4.0;
 MOT_HUBB_L = 0.7;
@@ -381,21 +419,106 @@ CAM_FLAT_Z0  = CAM_Z0 - 0.3;
         平面  元件占地 1027mm² / 内腔 56×26 = **71%**, 正是主机布不通的那个数
       但**现在先不动这三个数** —— 按项目原则, 外壳尺寸要等 PCB 布局定稿再反推,
       免得又出现"结构先定死、PCB 迁就不了"的老问题。                        */
-RC_L = 60;  RC_W = 30;  RC_H = 20;  RC_R = 4;  RC_TOP_T = 3;
-RC_BTN_X = [-18, 0, 18];
+/* --- 坐标约定 -------------------------------------------------------
+   PCB 用它自己的原点(板 x ±28.5, y -18..+15)。外壳是对称的 rbox, 所以
+   两套坐标差一个 Y 偏移: **外壳 y = PCB y + RC_PCB_DY**。
+   凡是"对准板上某个器件"的特征, 一律写成 PCB 坐标再加这个偏移,
+   别直接填外壳坐标 —— 主机的教训是坐标系混用迟早对不上。            */
+RC_PCB_L  = 57;    RC_PCB_W = 33;   RC_PCB_T = 1.6;
+RC_PCB_Y0 = -18;   RC_PCB_Y1 = 15;                 // PCB 自身的 y 范围
+RC_PCB_DY = -(RC_PCB_Y0 + RC_PCB_Y1)/2;            // = 1.5
+
+RC_L = 63;  RC_W = 40;  RC_H = 26;  RC_R = 4;  RC_TOP_T = 3;
+// ⚠ 高度取 26 不是 24: 24 时上盖背面在 21, 而按键帽的 φ11 导向凸台要往下伸 2mm
+//   到 19 —— 而 U1 叠高顶面在 20.4, **凸台会撞在模块上**。自检 t=64 抓到的。
+//   凸台位置由 PCB 的按键坐标定死(SW3 在 x=20, 正压在 U1 上方), 挪不了,
+//   只能把腔加高。加高后凸台底面 21, 让开 U1 0.6mm。
+// 外壳三个方向都是被算出来的, 不是挑的:
+//   长 63 = 内腔 59 + 2×2 壁。内腔长度**双向锁死**: -X 端拨柄尖在 x=-32.5,
+//     外壁面必须落在 -31.5 才露得出来; +X 端 USB 插头壳长只有 6.5mm。
+//   宽 40 = 内腔 36 + 壁。板 33 宽 + 两侧各 1.5 让位。
+//   高 24 = 地板 2 + 电池 4.6 + 支撑 0.5 + 板 1.6 + U1 叠高 11.7 + 0.6 + 盖 3
 RC_BTN_D = 6;
-// 502030 **含保护板**是 7×21×32 (裸电芯 5×20×30), 卧放占 -X 半场
-RC_BAT_T  = 7;   RC_BAT_W = 21;  RC_BAT_L = 32;
-RC_BAT_X0 = -RC_L/2 + WALL;               // -28, 直接靠 -X 内壁
-RC_BAT_X1 = RC_BAT_X0 + RC_BAT_L;         // +4
-RC_RIB_T  = 2.5;                          // 围挡厚
-// 拨动开关开口 (暂定): 与 Type-C 同在 +X 端面, 让开 USB 的 y ±5
-// ⚠ 开关型号已定为 **SK12D07VG7 卧式侧拨**(不是立式的 SS12D00) —— 开口在端面,
-//   立式的拨柄朝上, 方向对不上。这个坑主机踩过一次了。
-RC_PSW_W = 6;  RC_PSW_H = 4;  RC_PSW_Y = 9.5;  RC_PSW_Z = 8;
-// ❌ 状态灯观察孔已删除 (2026-08-15 用户拍板: 遥控器不做状态灯)。
-//    顺带了结了一处文档打架: 设计方案写"板载 WS2812", 尺寸基准写"普通蓝色 LED",
-//    两者驱动方式完全不同。现在都不用管了。
+
+/* --- 电池 502030 ---
+   ⚠ 实测 **32 × 20 × 4.6**(含保护板), 不是早先文档写的 7×21×32。
+   薄了 2.4mm, 外壳因此从 27.5 降到 24。                              */
+RC_BAT_L = 32;  RC_BAT_W = 20;  RC_BAT_T = 4.6;
+RC_BAT_X0 = -28;                    // PCB 坐标, 避开 x 5.5..11 的天线挖槽
+RC_BAT_X1 = RC_BAT_X0 + RC_BAT_L;   // -28 .. +4
+RC_RIB_T  = 2.5;                    // 围挡厚
+
+// 板在腔内的高度: 电池顶 + 0.5 让位
+RC_PCB_Z0 = WALL + RC_BAT_T + 0.5;              // 7.1 板底
+RC_PCB_Z  = RC_PCB_Z0 + RC_PCB_T;               // 8.7 板面
+RC_U1_STACK = 11.7;   // 低背排母 5.0 + 排针隔片 2.5 + 模块板 1.0 + USB-C 3.2
+
+/* --- 前端面(-X)两个开口。y 用 PCB 坐标, 画的时候再加 RC_PCB_DY --- */
+// U2 的 Type-C: 模块贴板, 座子在板面上 1.6..4.8 处
+/* 同主机: 按插头塑料头 11 x 6.5 开, 不是按金属壳。遥控器死区更大 ——
+   外壁面 -31.5 / 内壁面 -29.5 / 板边 -28.5 / U2 本体前沿 -28.0 -> **3.5mm**。 */
+RC_USB_Y = -5.5;  RC_USB_W = 12.5;  RC_USB_Z = RC_PCB_Z + 3.2;  RC_USB_H = 8.0;
+// SW4 拨柄: 本体高 4.4, 拨柄在半高
+RC_PSW_Y = 9.5;   RC_PSW_W = 6;   RC_PSW_Z = RC_PCB_Z + 2.2;  RC_PSW_H = 4;
+
+/* ❌ 不开 U1 的烧录口 (2026-08-15 用户拍板)。
+   两个 Type-C 并存时, 充电器插错到 C3 那个口, 5V 会顺着 5V 脚 -> 拨动开关
+   -> TP4056 的 OUT+, 而 OUT+ 与 B+ 直连(保护只切负极) = 直接怼电池。
+   DW01 能在 4.28V 兜住, 但那是靠保护救命不是设计; 想彻底堵死要串肖特基,
+   0.3V 压降又白扔一截电池容量。**改成拆壳拔模块烧录**(排母就是为此装的)。
+   顺带: 那个开口原本把外壳顶到 27.5(USB-C 座顶 22.8 差点豁穿分模线)。 */
+
+// ❌ 状态灯观察孔已删除 (用户拍板: 遥控器不做状态灯)
+
+/* --- 按键 (PCB 坐标, 与 PCB 布局一一对应) ---
+   SW1 抬杆(-16,9) / SW2 落杆(2,9) / SW3 复位(20,9), 间距 18mm。
+   轻触开关取 6×6×**9**: 顶杆尖 = 板面 8.7 + 9 = 17.7, 上盖背面 21 -> 让开 3.3 ✓
+   盖面在 24, 差 6.3mm 够不到 -> 和主机一样配打印按键帽 rc_btn_cap。 */
+RC_BTN_POS  = [[-16, 9], [2, 9], [20, 9]];
+RC_BTN_SW_H = 9.0;
+RC_BTN_CB_D = 9.5;     // 背面沉孔 (挡帽的法兰)
+RC_BTN_CB_T = 1.5;
+RC_BTN_GUIDE_H = 2.0;  // 背面导向凸台, 沉孔总深 3.5
+RC_BTN_GUIDE_D = 11.5;
+RC_CAP_CLR   = 0.5;
+RC_CAP_EXP   = 3.0;    // 露出盖面 (比主机的 5 矮, 遥控器按键小)
+RC_CAP_FLANGE_T = 2.5;
+RC_CAP_LOW_D = 6.0;
+RC_CAP_SEAT_Z = (RC_H - RC_TOP_T) + RC_BTN_CB_T;                 // 22.5 法兰止位
+RC_CAP_TOP_Z  = RC_H + RC_CAP_EXP;                               // 27.0
+RC_CAP_BOT_Z  = RC_PCB_Z + RC_BTN_SW_H + CAP_FLOAT - CAP_BLIND_L; // 16.9
+
+/* --- 锁紧螺柱 (PCB 坐标) ---
+   位置不是挑的, 是在板边扫出来的空窗: 板 57×33 塞进 59×36 的内腔只剩 1.5mm,
+   螺柱必须啃进板子, 而**四个板角一个都不能用** ——
+     (-28.5,-15) 切 U2 的 6 脚焊盘; (+28.5,-15) 切 U1 下排焊盘;
+     (+28.5,+15) 擦过 SW3 焊盘 0.45mm; 只有 (-28.5,+15) 干净。
+   而且 -Y 边右半段被 U1 那排焊盘(y=-13.12, x 7.11..24.89)永久占死。
+   解法是板往 -Y 加宽 3mm 做一条纯安装边, 缺口开在下面这四处。
+   ⚠ 扫描判据必须按焊盘**铜箔边缘**算(中心距 ≥1.5mm), 按中心距 0.45 选出来的
+     位置 DRC 直接报 Board Outline to TH Pad。                          */
+RC_BOSS = [[-7.5, 14.2], [11, 14.2], [-14, -17.2], [14, -17.2]];
+RC_NOTCH_W = 5;      // 板边缺口宽
+RC_NOTCH_D = 3;      // 深 (从板边往内)
+
+RC_PCB_CR = 2;   // 板四角倒 R2: 直角时板角到腔体 R3.4 圆角只剩 0.34mm 净距,
+                 // 倒 R2 后升到 1.0mm(这时被直边净距卡住, 再倒大也没用)
+
+// 承载板外形 (2D, PCB 坐标): 57×33 圆角 + 四个螺柱缺口 + 天线避让槽
+module rc_pcb_outline() {
+    difference() {
+        translate([0, (RC_PCB_Y0 + RC_PCB_Y1)/2])
+            hull() for (x = [-RC_PCB_L/2 + RC_PCB_CR, RC_PCB_L/2 - RC_PCB_CR],
+                        y = [-RC_PCB_W/2 + RC_PCB_CR, RC_PCB_W/2 - RC_PCB_CR])
+                translate([x, y]) circle(r = RC_PCB_CR);
+        for (p = RC_BOSS) {
+            top = (p[1] > 0);
+            translate([p[0] - RC_NOTCH_W/2, top ? RC_PCB_Y1 - RC_NOTCH_D : RC_PCB_Y0])
+                square([RC_NOTCH_W, RC_NOTCH_D]);
+        }
+        translate([5.5, -11]) square([5.5, 11]);   // 天线避让槽
+    }
+}
 
 /* =====================================================================
    通用模块
@@ -447,39 +570,47 @@ module csk(h, deep = 0) {
    1. 底座下托盘
       注意: 内腔在 difference 里挖，内部特征在 difference 之后加
    ===================================================================== */
+/* 🔴 结构顺序: 先 (壳体 − 内腔), 再并**实心**内部特征, **最后统一开底孔**。
+   v3.0 之前支撑柱是"自带底孔的整体"直接 union 上去的 —— union 会把底孔在
+   2mm 厚的地板那一段重新填实, 实际底孔只从 z=2 才开始, M2 自攻要在实心料里
+   硬攻 1.4mm, 极可能把柱子胀裂。这正是 README 坑 #2, 当初只在闸体上做对了,
+   托盘这边漏了。自检 t=24 抓到的。                                          */
 module base_tray() {
-    // --- 壳体 ---
+    Z0 = WALL - 1;                         // 内部特征往地板里埋 1mm 实体互穿
+    BOSS_H = TRAY_H - LIP_T - BOSS_CLR - Z0;
     difference() {
-        rbox(BASE_L, BASE_W, TRAY_H, BASE_R);
-        translate([0, 0, WALL])
-            rbox(BASE_L - 2*WALL, BASE_W - 2*WALL, TRAY_H, BASE_R - 0.6);
-        // Type-C (前端面, 对准 U3 TP4056 自带的 Type-C 座)
-        translate([-BASE_L/2 - 1, USB_Y - USB_W/2, USB_Z - USB_H/2])
-            cube([WALL + 2, USB_W, USB_H]);
-        // 总电源开关 (前端面)
-        translate([-BASE_L/2 - 1, PSW_Y - PSW_W/2, USB_Z - PSW_H/2])
-            cube([WALL + 2, PSW_W, PSW_H]);
-    }
-    // --- 内部特征: 一律从 z=WALL-1 起长, 往底板里埋 1mm 实体互穿 ---
-    Z0 = WALL - 1;
-    // 角螺柱: 顶面 19.8, 让开止口环底面(20), 柱身嵌进两侧内壁
-    for (p = BASE_BOSS) translate([p[0], p[1], Z0])
-        boss_top(TRAY_H - LIP_T - BOSS_CLR - Z0, CORNER_OD);
-
-    // --- 电池仓 (+X 半场) ---
-    // -X 挡边 + 前后两条; +X 端直接靠内壁挡住, 少一条筋
-    translate([BAT_X0 - 3, -BAT_YH - 3, Z0]) cube([3, 2*BAT_YH + 6, BAT_T + 1]);
-    for (s = [-1, 1])
-        translate([BAT_X0 - 3, s > 0 ? BAT_YH : -BAT_YH - 3, Z0])
-            cube([BAT_X1 - BAT_X0 + 4, 3, BAT_T + 1]);   // 伸进 +X 内壁 1mm
-
-    // --- 承载底板支撑柱 (-X 半场) ---
-    // 板子拧死在柱子上, 不再靠上盖压。柱子从 z=0 起长(整块吃穿底板厚度),
-    // 底孔留 0.6mm 不打穿, 这样 M2 才有 3.4mm 咬合深度 —— 只从 Z0 起长的话
-    // 咬合只剩 2.5mm, M2 自攻拧两次就滑。
-    for (p = PCB_MNT) translate([p[0], p[1], 0]) difference() {
-        cylinder(d = BOSS_OD, h = WALL + PCB_SO);
-        translate([0, 0, 0.6]) cylinder(d = BOSS_PILOT, h = WALL + PCB_SO);
+        union() {
+            // --- 壳体 ---
+            difference() {
+                rbox(BASE_L, BASE_W, TRAY_H, BASE_R);
+                translate([0, 0, WALL])
+                    rbox(BASE_L - 2*WALL, BASE_W - 2*WALL, TRAY_H, BASE_R - 0.6);
+                // Type-C (前端面, 对准 U3 TP4056 自带的 Type-C 座)
+                translate([-BASE_L/2 - 1, USB_Y - USB_W/2, USB_Z - USB_H/2])
+                    cube([WALL + 2, USB_W, USB_H]);
+                // 总电源开关 (前端面)
+                translate([-BASE_L/2 - 1, PSW_Y - PSW_W/2, USB_Z - PSW_H/2])
+                    cube([WALL + 2, PSW_W, PSW_H]);
+            }
+            // --- 实心内部特征 ---
+            // 角螺柱: 顶面 19.8, 让开止口环底面(20), 柱身嵌进两侧内壁
+            for (p = BASE_BOSS) translate([p[0], p[1], Z0])
+                cylinder(d = CORNER_OD, h = BOSS_H);
+            // 电池仓: -X 挡边 + 前后两条; +X 端直接靠内壁挡住, 少一条筋
+            translate([BAT_X0 - 3, -BAT_YH - 3, Z0]) cube([3, 2*BAT_YH + 6, BAT_T + 1]);
+            for (s = [-1, 1])
+                translate([BAT_X0 - 3, s > 0 ? BAT_YH : -BAT_YH - 3, Z0])
+                    cube([BAT_X1 - BAT_X0 + 4, 3, BAT_T + 1]);   // 伸进 +X 内壁 1mm
+            // 承载底板支撑柱: 从 z=0 起长, 整块吃穿地板厚度
+            for (p = PCB_MNT) translate([p[0], p[1], 0])
+                cylinder(d = BOSS_OD, h = WALL + PCB_SO);
+        }
+        // --- 最后统一开底孔, 保证贯穿所有材料 ---
+        for (p = BASE_BOSS) translate([p[0], p[1], Z0 + 0.5])
+            cylinder(d = BOSS_PILOT, h = BOSS_H);
+        // 支撑柱底孔: 留 0.6mm 不打穿地板, M2 咬合 3.4mm
+        for (p = PCB_MNT) translate([p[0], p[1], 0.6])
+            cylinder(d = BOSS_PILOT, h = WALL + PCB_SO);
     }
 }
 
@@ -676,7 +807,7 @@ module stop_rib() {
    为什么**没有前端挡肩**: 减速箱端面在 y=-11, 而凸轮占 y=-16.5..-11.5,
    任何挡肩都要伸到半径 7.8mm 以内才能挡住端面, 那里已经被凸轮占了。
    电机往 -Y 的位移由轴插进转毂孔的深度限住(轴 10mm / 孔 10.5mm, 余 0.5mm)。 */
-module motor_seat() {
+module motor_seat(crush = true) {
     PW    = MOT_W + 2*MOT_CLR;              // 10.8
     PH    = MOT_H + 2*MOT_CLR;              // 12.8
     RIB_T = 3;
@@ -690,6 +821,10 @@ module motor_seat() {
         // 电机隧道 (尾挡筋不挖, 所以只挖到 MOT_L+0.5)
         translate([-PW/2, MOT_Y0, PIV_Z - PH/2]) cube([PW, MOT_L + 0.5, PH]);
     }
+    // 压筋: 必须在隧道挖完之后再并上去, 否则被自己挖掉 (同教训 #6)
+    if (crush) for (yy = CRUSH_Y) for (sx = [-1, 1])
+        translate([sx * (MOT_W/2 - CRUSH_INT + CRUSH_R), yy + RIB_T/2, PIV_Z - PH/2])
+            cylinder(r = CRUSH_R, h = PH);
 }
 
 YIN = -HS_W/2 + WALL;    // -Y 内壁面 = -21
@@ -911,45 +1046,71 @@ module bar_b() {
 /* =====================================================================
    6. 遥控器
    ===================================================================== */
-RC_BOSS = [[-RC_L/2 + 7,  RC_W/2 - 6], [-RC_L/2 + 7, -RC_W/2 + 6],
-           [ RC_L/2 - 7,  RC_W/2 - 6], [ RC_L/2 - 7, -RC_W/2 + 6]];
+// PCB 坐标 -> 外壳坐标: 只差一个 Y 偏移
+function rcx(p) = [p[0], p[1] + RC_PCB_DY];
 
 module rc_bottom() {
+    TRAY_TOP = RC_H - RC_TOP_T;      // 21, 内腔天花板/分模面
     difference() {
-        rbox(RC_L, RC_W, RC_H - RC_TOP_T, RC_R);
+        rbox(RC_L, RC_W, TRAY_TOP, RC_R);
         translate([0, 0, WALL])
             rbox(RC_L - 2*WALL, RC_W - 2*WALL, RC_H, RC_R - 0.6);
-        // Type-C (+X 端面)
-        translate([RC_L/2 - WALL - 1, -USB_W/2, 5]) cube([WALL + 2, USB_W, USB_H]);
-        // 拨动开关拨柄开口 (v3.0 补。BOM 里本来就有 SS12D00, 是 CAD 漏了)
-        translate([RC_L/2 - WALL - 1, RC_PSW_Y - RC_PSW_W/2, RC_PSW_Z - RC_PSW_H/2])
+        // --- -X 端面两个开口 ---
+        // U2 的充电 Type-C
+        translate([-RC_L/2 - 1, RC_USB_Y + RC_PCB_DY - RC_USB_W/2, RC_USB_Z - RC_USB_H/2])
+            cube([WALL + 2, RC_USB_W, RC_USB_H]);
+        // SW4 拨柄 (卧式侧拨, 拨柄尖伸到 x=-32.5, 露出外壁面约 1mm)
+        translate([-RC_L/2 - 1, RC_PSW_Y + RC_PCB_DY - RC_PSW_W/2, RC_PSW_Z - RC_PSW_H/2])
             cube([WALL + 2, RC_PSW_W, RC_PSW_H]);
+        // ❌ +X 端不开烧录口, 见参数区说明
     }
-    // 内部特征 (在 difference 之外, 往底板埋 1mm)
-    // 螺柱顶面同样要让开 rc_top 背面 2mm 止口
-    for (p = RC_BOSS) translate([p[0], p[1], WALL - 1])
-        boss_top(RC_H - RC_TOP_T - LIP_T - BOSS_CLR - (WALL - 1));
-    // 电池仓围挡: 502030 **含保护板 7×21×32** 卧放在 -X 半场,
-    // -X 与 ±Y 三面直接靠内壁, 只需要一条 +X 端挡边 + 两条 ±Y 侧挡边
-    translate([RC_BAT_X1, -RC_W/2 + WALL, WALL - 1])
-        cube([RC_RIB_T, RC_W - 2*WALL, RC_BAT_T + 2]);
+    // --- 内部特征 (difference 之外) ---
+    // 锁紧螺柱: 下段 φ6 到板底做承托肩, 上段 φ4.4 穿过板边缺口
+    for (p = RC_BOSS) translate([rcx(p)[0], rcx(p)[1], WALL - 1]) {
+        cylinder(d = 6.0, h = RC_PCB_Z0 - (WALL - 1));
+        boss_top(TRAY_TOP - BOSS_CLR - (WALL - 1));
+    }
+    // 电池仓围挡: 32×20×4.6 卧放在 -X 半场, -X 靠内壁, 另三面各一条挡边
+    translate([RC_BAT_X1, RC_BAT_W/-2 + RC_PCB_DY - RC_RIB_T, WALL - 1])
+        cube([RC_RIB_T, RC_BAT_W + 2*RC_RIB_T, RC_BAT_T + 1]);
     for (s = [-1, 1])
-        translate([RC_BAT_X0 - 1, s > 0 ? RC_BAT_W/2 : -RC_W/2 + WALL, WALL - 1])
-            cube([RC_BAT_X1 - RC_BAT_X0 + 1, RC_W/2 - WALL - RC_BAT_W/2, RC_BAT_T + 2]);
-    // C3 SuperMini 与 TP4056 之间的隔筋 (在 +X 半场)
-    translate([RC_BAT_X1 + 10, -RC_W/2 + WALL, WALL - 1]) cube([3, RC_W - 2*WALL, 7]);
+        translate([RC_BAT_X0 - 1, s > 0 ? RC_BAT_W/2 + RC_PCB_DY : -RC_BAT_W/2 - RC_RIB_T + RC_PCB_DY, WALL - 1])
+            cube([RC_BAT_X1 - RC_BAT_X0 + 1 + RC_RIB_T, RC_RIB_T, RC_BAT_T + 1]);
 }
 
 module rc_top() {
     difference() {
         union() {
             rbox(RC_L, RC_W, RC_TOP_T, RC_R);
-            translate([0, 0, -LIP_T])
-                rbox(RC_L - 2*WALL - 2*GAP, RC_W - 2*WALL - 2*GAP, LIP_T + 0.01, RC_R - 0.6);
+            // 按键帽导向凸台 (背面)
+            for (b = RC_BTN_POS) translate([rcx(b)[0], rcx(b)[1], -RC_BTN_GUIDE_H])
+                cylinder(d = RC_BTN_GUIDE_D, h = RC_BTN_GUIDE_H + 0.01);
         }
-        for (x = RC_BTN_X) translate([x, 0, -4]) cylinder(d = RC_BTN_D, h = RC_TOP_T + 8);
-        // 同 base_top: 孔要连背面止口一起打穿
-        for (p = RC_BOSS) translate([p[0], p[1], 0]) csk(RC_TOP_T, LIP_T);
+        // 按键: 通孔 + 背面沉孔 (挡住帽的法兰, 防脱兼导向)
+        for (b = RC_BTN_POS) translate([rcx(b)[0], rcx(b)[1], 0]) {
+            translate([0, 0, -RC_BTN_GUIDE_H - 1])
+                cylinder(d = RC_BTN_CB_D, h = RC_BTN_GUIDE_H + RC_BTN_CB_T + 1);
+            translate([0, 0, -RC_BTN_GUIDE_H - 2])
+                cylinder(d = RC_BTN_D, h = RC_TOP_T + RC_BTN_GUIDE_H + 3);
+        }
+        // 角螺丝沉头孔 (这里没有止口环, 板厚就是 RC_TOP_T)
+        for (p = RC_BOSS) translate([rcx(p)[0], rcx(p)[1], 0]) csk(RC_TOP_T);
+    }
+}
+
+/* 遥控器按键帽 ×3。结构同主机的 btn_cap, 只是矮一号。
+   开关顶杆尖 8.7+9 = 17.7, 盖面 24 -> 差 6.3mm 够不到, 必须配帽。 */
+module rc_btn_cap() {
+    FL_Z = RC_CAP_SEAT_Z - RC_CAP_FLANGE_T - RC_CAP_BOT_Z;
+    difference() {
+        union() {
+            cylinder(d1 = RC_CAP_LOW_D, d2 = RC_BTN_CB_D - RC_CAP_CLR, h = FL_Z);
+            translate([0, 0, FL_Z])
+                cylinder(d = RC_BTN_CB_D - RC_CAP_CLR, h = RC_CAP_FLANGE_T);
+            translate([0, 0, RC_CAP_SEAT_Z - RC_CAP_BOT_Z])
+                cylinder(d = RC_BTN_D - RC_CAP_CLR, h = RC_CAP_TOP_Z - RC_CAP_SEAT_Z);
+        }
+        translate([0, 0, -0.01]) cylinder(d = CAP_BLIND_D, h = CAP_BLIND_L + 0.01);
     }
 }
 
@@ -981,15 +1142,15 @@ module part_block(sz, pos, col) {
         cube(sz);
 }
 
-// 承载底板外形 (2D): -X 两角切 5×5 缺口让开角螺柱
-module pcb_outline() {
-    difference() {
-        translate([PCB_X0, -PCB_YH]) square([PCB_X1 - PCB_X0, 2*PCB_YH]);
-        for (s = [-1, 1])
-            translate([PCB_X0, s > 0 ? PCB_YH - PCB_NOTCH : -PCB_YH])
-                square([PCB_NOTCH, PCB_NOTCH]);
-    }
-}
+// 承载底板外形 (2D): -X 两角 45° 倒角让开角螺柱。顶点顺序与 EDA 板框逐点对应。
+module pcb_outline() polygon([
+    [PCB_X0,               -PCB_YH + PCB_CHAMFER],
+    [PCB_X0 + PCB_CHAMFER, -PCB_YH],
+    [PCB_X1,               -PCB_YH],
+    [PCB_X1,                PCB_YH],
+    [PCB_X0 + PCB_CHAMFER,  PCB_YH],
+    [PCB_X0,                PCB_YH - PCB_CHAMFER]
+]);
 
 // 电池 (成品 51×34×10, +X 半场, 引线朝 -X)
 module battery()
@@ -1002,8 +1163,8 @@ module pcb_stack() {
         linear_extrude(PCB_T) pcb_outline();
     PZ = PCB_Z;                      // 板面 z = 5.6
     part_block([63.6, 27.9, U1_STACK], [-16, -8, PZ], "SteelBlue");   // U1 DevKit (rot 270)
-    part_block([28, 17, 4.8],   [-74.2, -6,   PZ], "Goldenrod");      // U3 TP4056
-    part_block([4.4, 8.7, 4.4], [-82.6, 17,   PZ], "Silver");         // SW3 拨动 (rot 270)
+    part_block([28, 17, 4.8],   [-74.8, -6,   PZ], "Goldenrod");      // U3 TP4056 (前沿 -88.23)
+    part_block([4.4, 8.7, 4.4], [-84.1, 17,   PZ], "Silver");         // SW3 拨动 (rot 270)
     part_block([37, 17, 7],     [-60,   23.5, PZ], "MediumPurple");   // U4 MT3608
     part_block([11.4, 7.6, 9.5],[-58,   10,   PZ], "Tan");            // J2 限位
     part_block([18.1, 21.1, 12.5], [-31, 20,  PZ], "IndianRed");      // U2 DRV8833
@@ -1127,4 +1288,5 @@ else if (sel == "rc_bottom")  rc_bottom();
 else if (sel == "rc_top")     rc_top();
 else if (sel == "cam")        cam();
 else if (sel == "btn_cap")    btn_cap();
+else if (sel == "rc_btn_cap") rc_btn_cap();
 else if (sel == "explode")    assembly();   // 同一个 assembly(), 靠 EXP 撑开

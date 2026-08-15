@@ -46,12 +46,22 @@ module sw_lever(a) at_sw(a)
 // t=1 / t=2 (上下壳直接求交) 已删除: 贴合面共面, 出的是零体积薄片, 判不了。
 // 它们的作用被 t=13 / t=14 (抬 0.01 脱开贴合面) 完全覆盖 —— 真有 >0.01 的
 // 干涉那两条照样抓得到。
+// 24/25: **支撑柱的自攻底孔是否对准承载底板的安装孔**。
+//   CAD 里的 PCB 模型没画孔, 这条以前从来没验过 —— 柱心与板孔用的是同一个
+//   常量 PCB_MNT, 但"用同一个常量"不等于"几何上真对得上"。
+//   φ1.4 探针从板面之上一路探到柱底: 底孔 φ1.7 从 z=0.6 开始, 所以到 z=1 必须畅通。
+if (t == 24) intersection() { base_tray();
+    for (p = PCB_MNT) translate([p[0], p[1], 1]) cylinder(d = PROBE_S, h = 9); }
+// 25: 阳性对照 —— 探针偏 1.5mm 必须撞在柱体上 -> NON-EMPTY
+if (t == 25) intersection() { base_tray();
+    for (p = PCB_MNT) translate([p[0] + 1.5, p[1], 1]) cylinder(d = PROBE_S, h = 9); }
+
 if (t == 3) intersection() { base_top();
     for (p = BASE_BOSS) probe_z(p[0], p[1], -LIP_T-1, TOP_T+1); }
 if (t == 4) intersection() { base_top();
     for (p = HS_BOSS) probe_z(HS_X_ABS+p[0], p[1], -LIP_T-1, TOP_T+1); }
-if (t == 5) intersection() { rc_top();
-    for (p = RC_BOSS) probe_z(p[0], p[1], -LIP_T-1, RC_TOP_T+1); }
+// t=5 (遥控上盖螺丝孔) 已删除: RC_BOSS 改成 PCB 坐标后它没加 RC_PCB_DY 偏移,
+//     而且 rc_top 已不带止口环。作用由 t=67 完全覆盖。
 if (t == 6) intersection() {
     translate([HS_X_ABS,HUB_Y_ABS,BASE_H+PIV_Z]) rotate([-90,0,0]) hub();
     translate([HS_X_ABS, BAR_Y_ABS, BASE_H+PIV_Z-BAR_H/2]) bar_a(); }
@@ -121,7 +131,10 @@ if (t == 56) intersection() { house_l(); pad_probe(90); }
 if (t == 20) intersection() { base_tray();
     translate([BAT_X0 + 0.05, -BAT_W/2 + 0.05, WALL + 0.05])
         cube([BAT_L - 0.1, BAT_W - 0.1, BAT_T - 0.1]); }
-// 21: 承载底板 vs 托盘 (抬 0.01 脱开支撑柱贴合面) —— 期望 EMPTY, 验证 5×5 切角避开角螺柱
+// 21: 承载底板 vs 托盘 (抬 0.01 脱开支撑柱贴合面) —— 期望 EMPTY,
+//     验证 -X 两角的 45°×7 倒角(PCB_CHAMFER, 与 EDA 板框逐点一致)避开角螺柱。
+//     ⚠ 曾经这里建成 5×5 方缺口, 挖掉的料比真板多, 于是一直"通过"——
+//        偏乐观的错误比报错更危险, 见 daozha-toy-scope 教训 #5。
 if (t == 21) intersection() { base_tray();
     translate([0,0,WALL+PCB_SO+0.01]) linear_extrude(PCB_T) pcb_outline(); }
 // 22: 板面以上 (BUDGET-0.1) 元件包络 vs 上盖 —— 期望 EMPTY, 验证中央区净高够
@@ -153,16 +166,92 @@ if (t == 30) intersection() { hub();
 //     若这条变 EMPTY, 说明孔又退化成整圆, D 面失效, 轴会空转
 if (t == 31) intersection() { hub();
     translate([0,0,BORE_Z0]) cylinder(d = SHAFT_D, h = BORE_Z1 - BORE_Z0); }
+module motor_box(grow = 0)
+    translate([-MOT_W/2 - grow, MOT_Y0, PIV_Z - MOT_H/2 - grow])
+        cube([MOT_W + 2*grow, MOT_L, MOT_H + 2*grow]);
 // 32: N20 机身 10×12×MOT_L 装得进电机座 -> EMPTY
-if (t == 32) intersection() { motor_seat();
-    translate([-MOT_W/2, MOT_Y0, PIV_Z - MOT_H/2]) cube([MOT_W, MOT_L, MOT_H]); }
+//     ⚠ 必须传 crush=false: 压筋是**故意**过盈的, 带着它测这条永远非空。
+//     这条测的是"隧道本身尺寸对不对", 压筋归 t=88/89 管。
+if (t == 32) intersection() { motor_seat(false); motor_box(); }
 // 33: 阳性对照 —— 旧版假设的 12.5 方形必须装不进 -> NON-EMPTY
-if (t == 33) intersection() { motor_seat();
+if (t == 33) intersection() { motor_seat(false);
     translate([-12.5/2, MOT_Y0, PIV_Z - 12.5/2]) cube([12.5, MOT_L, 12.5]); }
 // 34/35: 机械止挡。闸杆摆到 ang, 与止挡块求交。
 //        t=34 用 STOP_ANG-1 -> 必须 EMPTY;  t=35 用 STOP_ANG+1 -> 必须 NON-EMPTY
 if (t == 34) intersection() { hub_at(STOP_ANG - 1); stop_rib(); }
 if (t == 35) intersection() { hub_at(STOP_ANG + 1); stop_rib(); }
+
+/* ===== 遥控器 (v3.1, 按 PCB 定稿反推) =====
+   PCB 坐标 -> 外壳坐标只差 Y 偏移 RC_PCB_DY, 下面一律用 rcx() 换算,
+   免得两套坐标混用。                                                     */
+/* 承载板实体。**必须带四个螺柱缺口** —— 螺柱本来就是从缺口里穿上去的,
+   拿一块没缺口的方板去求交, 撞的是我自己画的测试模型, 不是设计缺陷。
+   (第一版就是这么误报的。) shrink 用 offset 让整圈缩进, 脱开贴合面。 */
+module rc_pcb_solid(shrink = 0, dz = 0)
+    translate([0, RC_PCB_DY, RC_PCB_Z0 + dz])
+        linear_extrude(RC_PCB_T) offset(delta = -shrink) rc_pcb_outline();
+
+// 60: 承载板放进腔里不撞任何内部特征 -> EMPTY
+//     ⚠ 板要**同时**缩 0.05(脱开螺柱侧壁)和抬 0.05(脱开承托肩顶面)。
+//        只缩不抬时交集是 z[7.10..7.10] 的零厚度薄片 —— 那是板本来就该坐上去的
+//        贴合面, 不是干涉。这个坑主机 t=1 踩过一次了。
+if (t == 60) intersection() { rc_bottom(); rc_pcb_solid(0.05, 0.05); }
+// 61: 阳性对照 —— 板往下沉 1mm(压到电池仓围挡上)必须撞 -> NON-EMPTY
+if (t == 61) intersection() { rc_bottom();
+    translate([0,0,-1]) rc_pcb_solid(0.05); }
+// 62: 电池实体放进电池仓 -> EMPTY (六面各缩 0.05 避开共面)
+if (t == 62) intersection() { rc_bottom();
+    translate([RC_BAT_X0 + 0.05, -RC_BAT_W/2 + RC_PCB_DY + 0.05, WALL + 0.05])
+        cube([RC_BAT_L - 0.1, RC_BAT_W - 0.1, RC_BAT_T - 0.1]); }
+// 63: 阳性对照 —— 按旧文档的 7mm 厚电池必须装不下(会顶到板) -> NON-EMPTY
+if (t == 63) intersection() {
+    translate([RC_BAT_X0 + 0.05, -RC_BAT_W/2 + RC_PCB_DY + 0.05, WALL + 0.05])
+        cube([RC_BAT_L - 0.1, RC_BAT_W - 0.1, 7 - 0.1]);
+    rc_pcb_solid(0.05); }
+// 64: U1 叠高包络(22.52×18×11.7, 立在板面上) vs 上盖 -> EMPTY
+module rc_u1_env(h) translate([16 - 22.52/2, -5.5 + RC_PCB_DY - 18/2, RC_PCB_Z])
+    cube([22.52, 18, h]);
+if (t == 64) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    rc_u1_env(RC_U1_STACK); }
+// 65: 阳性对照 —— 叠高再加 1mm 必须撞上盖(证明 64 不是白跑) -> NON-EMPTY
+if (t == 65) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    rc_u1_env(RC_U1_STACK + 1); }
+// 66: 上下壳求交(抬 0.01 脱开贴合面) -> EMPTY
+if (t == 66) intersection() { rc_bottom();
+    translate([0,0,RC_H-RC_TOP_T+0.01]) rc_top(); }
+// 67: 上盖螺丝孔真的通(探针从沉窝穿到背面) -> EMPTY
+if (t == 67) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    for (p = RC_BOSS) translate([p[0], p[1] + RC_PCB_DY, RC_H-RC_TOP_T-1])
+        cylinder(d = PROBE, h = RC_TOP_T + 2); }
+// 68: 按键帽坐进上盖 (下沉 0.01 脱开法兰贴合面) -> EMPTY
+if (t == 68) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    for (b = RC_BTN_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z - 0.01]) rc_btn_cap(); }
+// 69: 阳性对照 —— 帽往上拔 1mm, 法兰必须被沉孔挡住 -> NON-EMPTY
+if (t == 69) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    for (b = RC_BTN_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z + 1]) rc_btn_cap(); }
+// 70: 轻触开关本体 6×6×9 vs 上盖(含导向凸台) -> EMPTY
+if (t == 70) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    for (b = RC_BTN_POS) translate([b[0]-3, b[1]+RC_PCB_DY-3, RC_PCB_Z]) cube([6,6,RC_BTN_SW_H]); }
+// 71: 阳性对照 —— 换成 16mm 高的开关必须顶到上盖 -> NON-EMPTY
+//     (12mm 那版不成立: 板面 8.7 + 12 = 20.7 还没够到 23 的盖背面, 白设了个必过的对照)
+if (t == 71) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    for (b = RC_BTN_POS) translate([b[0]-3, b[1]+RC_PCB_DY-3, RC_PCB_Z]) cube([6,6,16]); }
+// 72: 拨柄能伸出外壁 —— 探针从壁外插到拨柄尖 x=-32.5 处, 必须畅通 -> EMPTY
+if (t == 72) intersection() { rc_bottom();
+    translate([-RC_L/2 - 1, RC_PSW_Y + RC_PCB_DY, RC_PSW_Z]) rotate([0,90,0])
+        cylinder(d = 1.5, h = WALL + 2); }
+// 73: 阳性对照 —— 同一探针挪到拨柄开口以外(y 偏 6mm)必须被壁挡住 -> NON-EMPTY
+if (t == 73) intersection() { rc_bottom();
+    translate([-RC_L/2 - 1, RC_PSW_Y + RC_PCB_DY + 6, RC_PSW_Z]) rotate([0,90,0])
+        cylinder(d = 1.5, h = WALL + 2); }
+// 74: 充电 Type-C 开口对得上座子 -> EMPTY
+if (t == 74) intersection() { rc_bottom();
+    translate([-RC_L/2 - 1, RC_USB_Y + RC_PCB_DY, RC_USB_Z]) rotate([0,90,0])
+        cylinder(d = 2.5, h = WALL + 2); }
+// 75: 阳性对照 —— +X 端**不该有**烧录口, 同样位置必须是实心壁 -> NON-EMPTY
+if (t == 75) intersection() { rc_bottom();
+    translate([RC_L/2 - WALL - 1, RC_USB_Y + RC_PCB_DY, RC_PCB_Z + RC_U1_STACK - 1.6])
+        rotate([0,90,0]) cylinder(d = 2.5, h = WALL + 2); }
 
 /* ===== v3.0: 拆件 / 凸轮 / 按键帽 / 麦克风 ===== */
 // 40: **装配路径**判定 —— 转毂上要穿过 φ8.5 壁孔的那一段(局部 z>=轴颈起点),
@@ -226,3 +315,76 @@ if (t == 51) intersection() { house_l();
 if (t == 52) intersection() { house_l();
     translate([-HS_L/2 + WALL, MIC_Y, MIC_Z]) rotate([0,90,0])
         cylinder(d = MIC_D, h = MIC_T_CHK); }
+
+/* ===== Type-C 插得到底吗 (t=80..85) ==========================================
+   这一组测的不是"开口对没对准座子"(那是 t=74 干的事), 而是**插头塞不塞得进去**。
+   两件事必须分开测: 金属壳穿得过 ≠ 插得到底 —— 完全插入时塑料头前端面基本贴住
+   座口, 所以从外壁面到座口那段死区**得由塑料头自己穿过去**。
+   建模: 塑料头 = 长方块, 完全插入姿态 = 前端面贴在座口平面上, 往 -X 长出去。
+   用户实测塑料头 11 x 6.5。                                                */
+PLUG_W = 11;  PLUG_T = 6.5;  PLUG_BODY_L = 20;   // 塑料头往外的长度, 够长就行
+MAIN_SOCKET_X = -88.23;                          // U3 本体前沿 = 座口 (EDA 复核)
+RC_SOCKET_X   = -28.0;                           // 遥控 U2 本体前沿
+
+module plug(w, thk, socket_x, y, z) {
+    translate([socket_x - PLUG_BODY_L, y - w/2, z - thk/2])
+        cube([PLUG_BODY_L, w, thk]);
+}
+// 80: 主机充电插头(含塑料头)完全插入 vs 托盘 -> EMPTY
+if (t == 80) intersection() { base_tray(); plug(PLUG_W, PLUG_T, MAIN_SOCKET_X, USB_Y, USB_Z); }
+// 81: 阳性对照 —— 塑料头放大到 14 x 9 必须被前端面挡住 -> NON-EMPTY
+//     没有这条就证明不了 t=80 是真在测"塑料头过不过得去"。
+if (t == 81) intersection() { base_tray(); plug(14, 9, MAIN_SOCKET_X, USB_Y, USB_Z); }
+// 82: 遥控器同一件事 -> EMPTY
+if (t == 82) intersection() { rc_bottom(); plug(PLUG_W, PLUG_T, RC_SOCKET_X, RC_USB_Y + RC_PCB_DY, RC_USB_Z); }
+// 83: 阳性对照 —— 遥控器塑料头放大必须被挡住 -> NON-EMPTY
+if (t == 83) intersection() { rc_bottom(); plug(14, 9, RC_SOCKET_X, RC_USB_Y + RC_PCB_DY, RC_USB_Z); }
+
+/* ===== 拨柄露够长吗 (t=84/85) ================================================
+   判据来自尺寸基准 §366: 拨柄尖要比外壁面再露 **1mm**, 手指才拨得动。
+   测法: 在"外壁面往外 1mm"处放个探针, **拨柄必须还在那儿**(NON-EMPTY);
+   再在拨柄尖之外放同样的探针, 必须扑空(EMPTY) —— 后者证明探针本身没问题。
+   ⚠ 光测"拨柄穿过开口不撞墙"是不够的: 拨柄缩在墙里也一样不撞。   */
+LEVER_TIP_X = -93.51;             // SW3 挪到 x=-84.1 之后 (EDA 复核)
+OUTER_X     = -BASE_L/2;          // -91.5
+module lever_solid()              // 拨柄: 从本体前面伸到尖端
+    translate([LEVER_TIP_X, PSW_Y - 1.2, USB_Z - 1.0]) cube([9, 2.4, 2.0]);
+module tip_probe(x)
+    translate([x, PSW_Y - 0.5, USB_Z - 0.5]) cube([0.4, 1.0, 1.0]);
+// 84: 外壁面外 1.0mm 处必须还有拨柄 -> NON-EMPTY
+if (t == 84) intersection() { lever_solid(); tip_probe(OUTER_X - 1.0); }
+// 85: 阳性对照 —— 拨柄尖再往外 0.5mm 必须扑空 -> EMPTY
+if (t == 85) intersection() { lever_solid(); tip_probe(LEVER_TIP_X - 0.5); }
+
+/* ===== 跨源核对: EDA 板孔 vs CAD 支撑柱 (t=86/87) ============================
+   🔴 t=24 的探针和柱子**都是从 PCB_MNT 生成的 —— 那是自洽, 不是核对**。
+      PCB_MNT 整体写错, t=24 照样全过。承载底板 -X 倒角那次栽的就是这个跟头。
+   这里把 2026-08-15 从 EDA **实读**的孔位硬写成字面量: 谁动了 PCB_MNT 而没同步
+   EDA(或反过来改了 EDA 没同步 CAD), 这条就会红。
+   来源: pcb_PrimitivePad.getAll() 里 metallization===false && !net 的四个焊盘
+        (不是按预期坐标去搜的, 是让它们自己浮出来的), 孔径 ["ROUND",86.6142] mil = φ2.2000。
+   ⚠ ±0.0012 是 EDA 的 mil 量化, 不是偏差。
+   探针取 φ1.6 塞进 φ1.7 底孔 -> 单边只剩 0.05mm, 偏心超过 0.05 就会红;
+   而真实装配的余量是 M2 φ2.0 穿板孔 φ2.2 = 0.1mm, 所以这条比装配严一倍。 */
+EDA_MNT = [[-81.9988,  27.0002], [-81.9988, -27.0002],
+           [ 25.9994,  27.0002], [ 25.9994, -27.0002]];
+PROBE_T = 1.6;
+// 86: 从 EDA 实读孔位下探针, 必须穿得过 CAD 支撑柱的底孔 -> EMPTY
+if (t == 86) intersection() { base_tray();
+    for (p = EDA_MNT) translate([p[0], p[1], 1]) cylinder(d = PROBE_T, h = 9); }
+// 87: 阳性对照 —— 同样探针偏 0.15mm 必须撞柱体 -> NON-EMPTY (证明 86 有分辨力)
+if (t == 87) intersection() { base_tray();
+    for (p = EDA_MNT) translate([p[0] + 0.15, p[1], 1]) cylinder(d = PROBE_T, h = 9); }
+
+/* ===== 电机压筋 (t=88/89) ====================================================
+   这一对是**上下界**, 单独任何一条都证明不了压筋是对的:
+     88 (NON-EMPTY): 压筋必须真的伸进电机轮廓里 —— 否则它就是个摆设,
+                     电机照样有 3.94° 旷量(折到 300mm 杆尖 20.6mm)。
+                     ⚠ 只测"隧道装得下电机"(t=32) 永远发现不了这一点。
+     89 (EMPTY):     把电机每边缩 CRUSH_INT+0.05 之后必须不碰 —— 证明过盈量是
+                     **有界的**(≤0.2mm/边), 是蹭平的压筋, 不是插不进去的死配合。
+   两条一起才卡住"既要夹得住、又要装得进"。                                  */
+// 88: 压筋必须与电机轮廓过盈 -> NON-EMPTY
+if (t == 88) intersection() { motor_seat(); motor_box(); }
+// 89: 过盈量有界 —— 电机每边缩 0.2 必须脱开 -> EMPTY
+if (t == 89) intersection() { motor_seat(); motor_box(-(CRUSH_INT + 0.05)); }
