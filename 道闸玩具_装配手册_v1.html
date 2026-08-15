@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>道闸玩具 · 装配手册 v1</title>
+<style>
+  :root {
+    --paper:     #F5F4F0;
+    --card:      #FFFFFF;
+    --ink:       #1B1916;
+    --muted:     #6E6A61;
+    --rule:      #DED9CF;
+    --rule-soft: #EBE7DF;
+    --amber:     #B57614;
+    --amber-bg:  #FBF1DC;
+    --danger:    #A32E23;
+    --danger-bg: #FAE9E6;
+    --check:     #3F6B4A;
+    --check-bg:  #E8F1E9;
+    --code-bg:   #EEEBE3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #16150F;
+      --card:      #1E1D17;
+      --ink:       #EBE7DD;
+      --muted:     #9B958A;
+      --rule:      #34322A;
+      --rule-soft: #262419;
+      --amber:     #E2A63C;
+      --amber-bg:  #2A2313;
+      --danger:    #E0796C;
+      --danger-bg: #2E1A17;
+      --check:     #8CBE99;
+      --check-bg:  #182219;
+      --code-bg:   #24231C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:     #16150F;
+    --card:      #1E1D17;
+    --ink:       #EBE7DD;
+    --muted:     #9B958A;
+    --rule:      #34322A;
+    --rule-soft: #262419;
+    --amber:     #E2A63C;
+    --amber-bg:  #2A2313;
+    --danger:    #E0796C;
+    --danger-bg: #2E1A17;
+    --check:     #8CBE99;
+    --check-bg:  #182219;
+    --code-bg:   #24231C;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                 "Source Han Sans SC", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px 120px; }
+
+  code, .mono, .spec {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+                 "Noto Sans Mono CJK SC", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.12em 0.4em;
+    border-radius: 3px;
+    font-size: 0.88em;
+  }
+
+  /* ---------- 页眉 ---------- */
+  .masthead {
+    border-bottom: 3px solid var(--ink);
+    padding: 56px 0 20px;
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--amber); font-weight: 700; margin: 0 0 14px;
+  }
+  .masthead h1 {
+    font-size: clamp(30px, 5.5vw, 46px);
+    line-height: 1.15; margin: 0 0 14px; font-weight: 800;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 17px; color: var(--muted); margin: 0; max-width: 62ch;
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 28px;
+    margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule);
+    font-size: 13px; color: var(--muted);
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- 阶段 ---------- */
+  .phase { margin-top: 64px; }
+  .phase-head {
+    display: flex; align-items: baseline; gap: 16px;
+    border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 8px;
+  }
+  .phase-num {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px; font-weight: 700; color: var(--paper);
+    background: var(--ink); padding: 3px 9px; border-radius: 3px;
+    letter-spacing: 0.06em; flex: none;
+  }
+  .phase-head h2 {
+    font-size: clamp(21px, 3.2vw, 27px); margin: 0; font-weight: 750;
+    letter-spacing: -0.01em;
+  }
+  .phase-note { color: var(--muted); font-size: 14px; margin: 12px 0 0; }
+
+  /* ---------- 步骤 ---------- */
+  .step {
+    display: grid; grid-template-columns: 46px 1fr; gap: 0 18px;
+    padding: 26px 0; border-bottom: 1px solid var(--rule-soft);
+  }
+  .step:last-child { border-bottom: none; }
+  .step-n {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 20px; font-weight: 700; color: var(--amber);
+    line-height: 1.4; font-variant-numeric: tabular-nums;
+  }
+  .step h3 { margin: 0 0 8px; font-size: 17px; font-weight: 700; line-height: 1.45; }
+  .step-body > :first-child { margin-top: 0; }
+  .step-body > :last-child { margin-bottom: 0; }
+  .step p { margin: 0 0 10px; }
+  .step ul { margin: 0 0 10px; padding-left: 20px; }
+  .step li { margin-bottom: 5px; }
+
+  /* ---------- 提示块 ---------- */
+  .callout {
+    border-left: 3px solid var(--rule);
+    background: var(--card);
+    padding: 13px 16px; margin: 14px 0; border-radius: 0 4px 4px 0;
+    font-size: 15px;
+  }
+  .callout p { margin: 0 0 8px; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .tag {
+    display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .gate      { border-left-color: var(--danger); background: var(--danger-bg); }
+  .gate .tag { color: var(--danger); }
+  .warn      { border-left-color: var(--amber); background: var(--amber-bg); }
+  .warn .tag { color: var(--amber); }
+  .verify      { border-left-color: var(--check); background: var(--check-bg); }
+  .verify .tag { color: var(--check); }
+
+  /* ---------- 表格 ---------- */
+  .tw { overflow-x: auto; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 460px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  th {
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; border-bottom: 1.5px solid var(--rule);
+  }
+  td.spec { white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* ---------- 小节标题 ---------- */
+  .subhead {
+    font-size: 18px; font-weight: 750; margin: 34px 0 0;
+    padding-top: 14px; border-top: 2px solid var(--amber);
+    display: inline-block; letter-spacing: -0.005em;
+  }
+
+  /* ---------- 清单 ---------- */
+  .checklist { list-style: none; padding: 0; margin: 14px 0 0; }
+  /* ⚠ 这里**不能**用 display:grid —— Grid 会把每个子元素各自当成一个网格项,
+     <b>粗体</b> 是一项、紧跟其后的文字又是一项, 第三项被挤到第二行第一列(只有
+     22px 宽), 正文就一个字一行往下淌。改用相对定位 + 绝对定位的方框, li 保持
+     普通块盒, 行内内容正常回流。 */
+  .checklist li {
+    position: relative;
+    padding: 7px 0 7px 30px;
+    border-bottom: 1px dotted var(--rule); font-size: 15px;
+  }
+  .checklist li::before {
+    content: ""; position: absolute; left: 0; top: 13px;
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--muted); border-radius: 2px;
+  }
+  .checklist li:last-child { border-bottom: none; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; margin: 18px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--rule);
+    border-radius: 5px; padding: 14px 16px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; font-weight: 700; }
+  .card p  { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+
+  hr.sep { border: none; border-top: 1px solid var(--rule); margin: 56px 0 0; }
+  .footnote { font-size: 13.5px; color: var(--muted); margin-top: 20px; }
+  a { color: var(--amber); }
+  a:focus-visible, li:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  @media (max-width: 560px) {
+    .step { grid-template-columns: 34px 1fr; gap: 0 12px; }
+    .step-n { font-size: 17px; }
+    .wrap { padding: 0 16px 80px; }
+  }
+
+  /* ---------- 打印 / 导出 PDF ---------- */
+  @media print {
+    /* 三个选择器一起写: 页面可能被戳了 data-theme="dark", 只写 :root 压不过它 */
+    :root,
+    :root[data-theme="dark"],
+    :root:not([data-theme="light"]) {
+      --paper: #FFFFFF; --card: #FFFFFF; --ink: #000000; --muted: #43403A;
+      --rule: #B4AFA5; --rule-soft: #D8D4CB; --code-bg: #EFEDE7;
+      --amber: #8A5A05; --amber-bg: #FBF3E2;
+      --danger: #8C2018; --danger-bg: #FAEBE8;
+      --check: #2E5237; --check-bg: #EDF3EE;
+    }
+    @page { margin: 16mm 14mm; }
+    body { background: #fff; font-size: 10.5pt; line-height: 1.55; }
+    .wrap { max-width: none; padding: 0; }
+    .masthead { padding-top: 0; }
+    .phase { margin-top: 26px; }
+    /* 别把标题和它领起的内容拆到两页 */
+    .phase-head, .subhead { break-after: avoid; }
+    .step, .callout, .card, tr, .checklist li { break-inside: avoid; }
+    .tw { overflow: visible; }
+    table { min-width: 0; font-size: 9.5pt; }
+    .card, .callout { box-shadow: none; }
+    a { color: var(--ink); text-decoration: underline; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">道闸玩具 · 6~10 岁</p>
+  <h1>装配手册</h1>
+  <p class="standfirst">
+    从一堆焊好的板子、打印件和螺丝，到一台会听话起落杆的道闸。
+    按阶段走，<b>红色「顺序卡点」的地方不能跳</b>——那几步做反了要拆回去，个别会烧板子。
+  </p>
+  <div class="meta">
+    <span><b>对应</b> CAD v3.3 · 主机 PCB1 · 遥控 PCB1</span>
+    <span><b>打印件</b> 12 种 14 件</span>
+    <span><b>螺丝</b> 27 颗</span>
+    <span><b>预计</b> 3~4 小时（不含打印）</span>
+  </div>
+</header>
+
+<!-- ============ 阶段 0 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 0</span>
+    <h2>开工前</h2>
+  </div>
+  <p class="phase-note">工具、耗材、以及三条贯穿全程的规矩。</p>
+
+  <div class="callout gate">
+    <span class="tag">贯穿全程的三条规矩</span>
+    <p><b>1 · 插拔任何东西之前，先把拨动开关关掉。</b> 主机和遥控器都一样。开关串在电池和模块的 5V 脚之间，关掉就是物理断开——这是唯一能防止 5V 倒灌回 TP4056 的 OUT+（它与 B+ 直连，保护只切负极）把电芯怼坏的办法。</p>
+    <p><b>2 · 塑件里的自攻螺丝，一律手拧，不用电动批。</b> 底孔是 φ1.7，靠挤压塑料成型；电动批一冲就把孔撕开，再也咬不住。转毂那颗横穿螺丝尤其不能用。</p>
+    <p><b>3 · 底孔不要扩孔。</b> 拧起来发紧是正常的。扩到 φ2 以上就彻底没有咬合力了。</p>
+  </div>
+
+  <h3 class="subhead">工具</h3>
+  <ul class="checklist">
+    <li>电烙铁（可调温，设 <code>350 ℃</code>）+ 焊锡 + 助焊剂／松香</li>
+    <li>十字螺丝刀 <b>PH0</b>（M2 自攻用）</li>
+    <li><b>长杆细螺丝刀</b>——要能穿过闸体前面板 <code>φ3</code> 的孔去拧凸轮顶丝，杆径 &lt; 2.5mm、长 &gt; 40mm</li>
+    <li>万用表（调升压、查通断）</li>
+    <li>卡尺（核对模块实测尺寸）</li>
+    <li>剥线钳 + 细软导线（闸体到底板的飞线，建议 26~28 AWG 硅胶线）</li>
+  </ul>
+
+  <h3 class="subhead">耗材</h3>
+  <ul class="checklist">
+    <li><b>螺纹胶</b>（凸轮顶丝必须点，它是转毂唯一的轴向固定）</li>
+    <li><b>502 或热熔胶</b>（配重螺母、飞线固定、闸杆 A/B 对接双保险）</li>
+    <li><b>EVA 泡棉</b>（主机电池压紧，电池顶到上盖有 7mm 空隙）</li>
+    <li><b>2 kΩ 贴片电阻</b>（换 TP4056 的 Rprog，见阶段 1 第 1 步）</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="tag">焊盘是 OSP 工艺</span>
+    <p>OSP 保质期约 <b>6 个月</b>，受潮更短。板子到手<b>尽快焊</b>，暂时不焊就留在原包装袋里配干燥剂。</p>
+    <p>两块板都是<b>两面 GND 覆铜</b>，接 GND 的直插焊盘吃热多，OSP 又比喷锡难润湿——烙铁给足温度和助焊剂，<b>看到锡明显爬满孔壁再撤</b>，否则容易出看着焊上了其实是虚焊。</p>
+  </div>
+</section>
+
+<!-- ============ 阶段 1 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 1</span>
+    <h2>主机 · 电子装配</h2>
+  </div>
+  <p class="phase-note">承载底板 120 × 65。全部焊完再进机械装配，板子装进托盘后就够不到背面了。</p>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h3>先把 TP4056 的 Rprog 换成 2 kΩ</h3>
+      <p>模块出厂是 1.2 kΩ = 1000 mA。<b>换 2 kΩ → 600 mA</b>。</p>
+      <p>理由不是电池受不了，是<b>发热</b>：1 A 充电时模块自身耗散 1.2 W 以上，外壳会烫手，而且 TP4056 的热调节会自己降流，充电变慢且不可预测。600 mA 过夜充满绰绰有余。</p>
+      <div class="callout warn">
+        <span class="tag">趁模块还没焊上板</span>
+        <p>这颗电阻在模块正面，焊到底板上之后周围就挤了，先换掉省事。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h3>焊直插件：先矮后高</h3>
+      <p>顺序：<b>电阻电容 → 排母 → 端子 → 开关 → 蜂鸣器</b>。矮的先焊，板子才能平放在桌上不翘。</p>
+      <div class="callout gate">
+        <span class="tag">排母必须是低背 5.0mm</span>
+        <p>常见的 8.5mm 排母会让 DevKit 叠高到 <code>15.67mm</code>，而板面以上净空只有 <code>13.4mm</code>——<b>装不进去，上盖扣不上</b>。低背 5.0 叠高 <code>12.17mm</code>，余 1.2mm。</p>
+      </div>
+      <p>焊排母之前先把 DevKit 插上去比一下，保证两排平行不歪；歪了模块插拔会别劲。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h3>焊 U3 TP4056 与 U4 MT3608（贴板直焊，不用排母）</h3>
+      <p>U3 的 Type-C 那端朝 <code>−X</code>，本体前沿与板边基本齐平（悬出 0.23mm）。</p>
+      <div class="callout gate">
+        <span class="tag">焊 U3 之前，拿充电线试插一次</span>
+        <p>外壁面到 Type-C 座口有 <b>3.27mm 死区</b>，靠插头的<b>塑料头</b>穿过去。外壳开口已按实测塑料头 <code>11 × 6.5</code> 放大到 <code>12.5 × 8.0</code>。</p>
+        <p><b>换更粗的线就要重新量、重新改开口再打印。</b>焊死之后才发现插不到底，就得拆模块。</p>
+      </div>
+      <p>U2 DRV8833 的焊盘是<b>按列编号</b>（1–8 左列 / 9–16 右列），不是常规奇偶交替——照编号连会全错，接线前对一遍选型锁定文档里的对照表。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">4</div>
+    <div class="step-body">
+      <h3>调升压 MT3608 输出到 5.0 V</h3>
+      <div class="callout gate">
+        <span class="tag">顺序卡点 · 必须在插 DevKit 之前</span>
+        <p>MT3608 出厂电位器是随机位置，可能输出十几伏。<b>先接电池、用万用表量着把它调到 5.0 V，确认稳定，再插 DevKit。</b></p>
+        <p>反过来做，第一次上电就可能把 ESP32-S3 模块烧掉。这一步不可逆。</p>
+      </div>
+      <ul>
+        <li>拨动开关打开 → 万用表接 MT3608 输出</li>
+        <li>慢慢转电位器到 <b>5.00 V</b></li>
+        <li>关掉开关，等 10 秒，再开一次确认还是 5.0 V</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">5</div>
+    <div class="step-body">
+      <h3>插上 U1 DevKit 和 U2 DRV8833</h3>
+      <p>确认拨动开关是<b>关</b>的再插。模块靠排母架空，插到底但别硬压。</p>
+      <div class="callout verify">
+        <span class="tag">阶段检验</span>
+        <p>开关打开 → DevKit 上电指示灯亮 → 用万用表确认 <code>3V3</code> 和 <code>+5V</code> 都正常 → 关掉开关。此时先<b>不要</b>装进外壳。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 阶段 2 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 2</span>
+    <h2>主机 · 闸体子装配</h2>
+  </div>
+  <p class="phase-note">闸体是独立的子装配，全部在左壳里做完再合右壳。<b>这是全机最容易装错的部分</b>——转毂有一条唯一可行的装配路径。</p>
+
+  <div class="step">
+    <div class="step-n">6</div>
+    <div class="step-body">
+      <h3>左壳装两只微动开关——先松着拧</h3>
+      <p><code>M2×10 盘头自攻</code> × 4，从腔内往两块安装台上拧。</p>
+      <div class="callout warn">
+        <span class="tag">现在别拧紧</span>
+        <p>底孔是<b>径向长圆孔</b>（±1.5mm 可调），就是为了后面对着凸轮微调位置用的。现在拧到「能转动但不松垮」就停。</p>
+        <p>长圆孔里自攻螺丝只咬两条长边，咬合面积少一半——最终拧紧时手感发紧就停，别使劲。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">7</div>
+    <div class="step-body">
+      <h3>把 N20 电机推进隧道</h3>
+      <p>减速箱端面朝里（朝转毂那侧），沿隧道推到尾端顶住尾挡筋。</p>
+      <div class="callout warn">
+        <span class="tag">推起来发紧是设计成这样的</span>
+        <p>隧道侧壁有<b>两道压筋</b>，单边过盈 0.15mm，推进去时会被电机蹭平——这正是靠它吃掉配合间隙的。</p>
+        <p>没有压筋的话电机能在方孔里转 <code>3.94°</code>，折到 300mm 杆尖就是 <b>20.6mm</b> 的旷量，起落换向时肉眼可见。</p>
+        <p>要用点力但不该「推不动」。真推不动先检查隧道里有没有打印残留的支撑或毛刺。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">8</div>
+    <div class="step-body">
+      <h3>转毂穿过壁孔 → 从腔内套上凸轮</h3>
+      <div class="callout gate">
+        <span class="tag">顺序卡点 · 凸轮不能先装</span>
+        <p>闸体壁上的轴颈孔只有 <code>φ8.5</code>，而凸轮盘是 <code>φ18.6</code>——<b>装好凸轮的转毂物理上穿不过去</b>。转毂拆成两件就是为了这个。</p>
+        <p>正确顺序：<b>① 转毂从壳外沿轴向推进壁孔 → ② 手伸进腔内，把凸轮套到轴颈上。</b></p>
+      </div>
+      <p>凸轮的 <b>D 形孔</b>配轴颈上的键面，<b>只有一个方向能套进去</b>，套进去角度就是对的，不需要装配时对相位。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">9</div>
+    <div class="step-body">
+      <h3>拧凸轮顶丝并点螺纹胶</h3>
+      <p>把闸杆（或转毂夹臂）摆到<b>落杆位 0°</b>，此时顶丝正对闸体前面板的 <code>φ3</code> 进入孔。用长杆细螺丝刀从壳外捅进去拧 <code>M2×8 盘头自攻</code>。</p>
+      <div class="callout gate">
+        <span class="tag">必须点螺纹胶</span>
+        <p>这颗顶丝是<b>转毂唯一的轴向固定</b>：拧紧后往外拔会被 φ12 轴承凸台挡住，往里推会被夹杆臂撞外壁。它一松，整个转毂加闸杆就会往外滑出来。</p>
+      </div>
+      <p class="footnote">顶丝是径向的，而闸体开口在分模面方向，合壳之后伸手够不着——所以才专门开了那个 φ3 孔。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">10</div>
+    <div class="step-body">
+      <h3>调两只微动开关的位置，然后拧紧</h3>
+      <p>手动慢慢转动转毂，观察凸轮和开关簧片杠杆：</p>
+      <ul>
+        <li>转到<b>落杆位</b>时，凸起应<b>刚好把杠杆压下</b>（听到咔哒）</li>
+        <li>转到中间（约 45°）时，杠杆应<b>已经释放</b></li>
+        <li>转到<b>起杆位</b>时，另一只<b>刚好压下</b></li>
+      </ul>
+      <p>沿长圆孔前后滑动开关直到三条都满足，再拧紧。</p>
+      <div class="callout verify">
+        <span class="tag">阶段检验</span>
+        <p>反复手动扫 0°↔90° 三次，两只开关都应在正确位置干脆地通断，中间行程完全释放。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">11</div>
+    <div class="step-body">
+      <h3>装麦克风，焊飞线</h3>
+      <p>INMP441 圆板（<code>φ14 × 厚 1</code>）放进闸体前面板内侧的圆窝，压舌卡住。</p>
+      <p>焊 <b>5 根</b>飞线下来：<code>SCK / WS / SD / VDD / GND</code>（L-R 就近接 GND）。线留足够长，要一直走到底座里的 J3 端子。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">12</div>
+    <div class="step-body">
+      <h3>合右壳，四颗长螺丝对拧</h3>
+      <p><code>M2×30 沉头自攻</code> × 4，从<b>右壳外表面</b>往左壳螺柱拧。</p>
+      <div class="callout warn">
+        <span class="tag">这四颗最容易顶裂导向柱</span>
+        <p>M2×30 又细又长，要跨过 23mm 才够到对面螺柱。<b>先用手扶正拧几圈确认是直的，再慢慢加力</b>。斜着拧一定会把导向柱顶裂。全程手拧。</p>
+      </div>
+      <p>合壳前确认：电机线、两只限位开关线、麦克风线都已经理出来，别被壳夹住。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 阶段 3 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 3</span>
+    <h2>主机 · 总装</h2>
+  </div>
+
+  <div class="step">
+    <div class="step-n">13</div>
+    <div class="step-body">
+      <h3>承载底板装进托盘</h3>
+      <p><code>M2×5 盘头自攻</code> × 4，位置 <code>(−82, ±27)</code> 和 <code>(+26, ±27)</code>。</p>
+      <div class="callout warn">
+        <span class="tag">长度不可超 5mm</span>
+        <p>支撑柱底孔只有 3.4mm 深，再长就把托盘 2mm 的地板顶穿了。</p>
+      </div>
+      <p>板子 <code>−X</code> 两角是 <b>45°×7 倒角</b>（不是方缺口），正好让开底座的角螺柱，净距 0.89mm。放不进去说明放反了方向。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">14</div>
+    <div class="step-body">
+      <h3>电池放进电池仓</h3>
+      <p>103450 锂电（成品 <code>51 × 34 × 10</code>）卧放在 <code>+X</code> 半场，<b>引线朝 −X</b>，从挡边上方跨过去接 J4。</p>
+      <p>顶面离上盖还有 7mm，<b>垫一块 EVA 泡棉</b>压住，否则晃动时会拽引线。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">15</div>
+    <div class="step-body">
+      <h3>上盖：先放按键帽，再拧闸体</h3>
+      <div class="callout gate">
+        <span class="tag">顺序卡点 · 两件都必须在扣盖之前做</span>
+        <p><b>① 两个按键帽从上盖背面放进去</b>——帽子的 φ12 法兰卡在背面沉孔里防脱，扣上盖之后就塞不进去了。</p>
+        <p><b>② 闸体用 <code>M2×10 沉头自攻</code> × 4 从盖板背面往上拧</b>，位置 <code>(36.5, ±15)</code> 和 <code>(66.5, ±15)</code>。扣盖之后螺丝刀伸不进去。</p>
+      </div>
+      <p>闸体朝向：<b>闸杆沿 +Y 伸出</b>，转轴靠近底座<b>无充电口</b>那一端。装反了充电口会被闸体挡住。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">16</div>
+    <div class="step-body">
+      <h3>穿线、接端子</h3>
+      <p>闸体来的线（电机 2 根、限位 4 根、麦克风 5 根）穿过上盖的走线孔，位置 <code>(68, 0)</code>，正在电池上方。</p>
+      <p>接到板上：<b>J1 电机 / J2 限位 / J3 麦克风</b>。飞线贴着电池顶面往 −X 走，用一点热熔胶固定，别让它垂在转动件附近。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">17</div>
+    <div class="step-body">
+      <h3>扣上盖</h3>
+      <p><code>M2×12 沉头自攻</code> × 4，位置 <code>(±87, ±32)</code>，底座四角。</p>
+      <div class="callout verify">
+        <span class="tag">扣之前最后确认</span>
+        <p>两个按键帽在位、闸体已拧好、所有线接好且不会被止口环压住、电池泡棉垫好。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">18</div>
+    <div class="step-body">
+      <h3>装闸杆</h3>
+      <p>闸杆 A 插进转毂夹臂（插入深度 20mm），<code>M2×10 盘头自攻</code> 横穿夹紧，距杆根 6mm。</p>
+      <div class="callout gate">
+        <span class="tag">整机唯一的主受力螺丝</span>
+        <p>闸杆全部重量和电机扭矩都从这颗过。<b>手拧到发紧即可，绝对不能用电动批</b>——会直接把 φ1.7 底孔撕开。长度不可超 10mm，否则会顶到闸体外壁，闸杆一转就刮壳。</p>
+      </div>
+      <p>闸杆 A/B 对接用 <code>M2×6 盘头自攻</code>，啮合只有 2.1mm，<b>加一滴 502 双保险</b>，别反复拆。</p>
+      <p>转毂 <code>−X</code> 配重仓从端面滑入 <b>1~2 颗 M5 碳钢螺母</b>（别买不锈钢，密度低），点一滴热熔胶固定。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 阶段 4 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 4</span>
+    <h2>遥控器</h2>
+  </div>
+  <p class="phase-note">板 57 × 33，外壳 63 × 40 × 26。电池在<b>板子底下</b>，装配顺序和主机不一样。</p>
+
+  <div class="step">
+    <div class="step-n">19</div>
+    <div class="step-body">
+      <h3>焊接</h3>
+      <ul>
+        <li>先矮后高：贴片 → 排母 → 拨动开关 → 三颗轻触开关</li>
+        <li>U2 TP4056 <b>贴板直焊</b>，Type-C 朝 <code>−X</code>；同样先试插充电线</li>
+        <li>U1 ESP32-C3 SuperMini 插<b>低背 5.0 排母</b>，不直焊——要能拔下来烧录</li>
+      </ul>
+      <div class="callout warn">
+        <span class="tag">电池引线用 P1 那两个焊盘，不装排针</span>
+        <p>P1 是按 1×2 排针封装做的<b>焊盘</b>，电池线直接焊上去。不能用 KF128 端子——它高 9.5mm，而板面以上只有 6.9mm。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">20</div>
+    <div class="step-body">
+      <h3>电池贴到板子底面</h3>
+      <p>锂电 <code>32 × 20 × 4.6</code> 卧放在下壳电池仓（<code>−X</code> 半场，三面挡边），<b>不要压在天线正下方</b>。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">21</div>
+    <div class="step-body">
+      <h3>板子放进下壳</h3>
+      <p>四根锁紧螺柱<b>穿过板边的四个缺口</b>，板子坐在螺柱的 <code>φ6</code> 承托肩上（顶面 z = 7.1）。</p>
+      <p class="footnote">这块板<b>没有安装孔</b>——横向靠四根柱子卡在缺口里定位，向下靠承托肩托住，向上靠上盖的四条压条压住。三者缺一板子就会窜。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">22</div>
+    <div class="step-body">
+      <h3>上盖：放两个按键帽，扣壳</h3>
+      <div class="callout warn">
+        <span class="tag">只有两个帽，不是三个</span>
+        <p>上盖只开<b>抬杆</b>和<b>落杆</b>两个孔——三个按钮对这个年龄段容易误操作。<b>SW3 复位开关仍焊在板上</b>，只是上盖那块是实心面板按不到。复位功能没丢：主机的离线语音本来就有「复位」这条命令。</p>
+      </div>
+      <p>按键帽从背面放入，然后 <code>M2×12 沉头自攻</code> × 4 扣壳。扣的时候上盖背面那四条压条会正好压在板面上。</p>
+      <div class="callout verify">
+        <span class="tag">阶段检验</span>
+        <p>扣好后轻轻晃动整机，<b>板子不应有任何哐当声</b>。有声音说明压条没压实，检查是不是有打印毛刺垫住了。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 阶段 5 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">阶段 5</span>
+    <h2>首次上电与调试</h2>
+  </div>
+
+  <div class="step">
+    <div class="step-n">23</div>
+    <div class="step-body">
+      <h3>充电测试</h3>
+      <p>两台都<b>先关拨动开关</b>再插充电线。观察上盖／上壳观察窗里的 TP4056 指示灯：充电中红灯、充满蓝／绿灯。</p>
+      <div class="callout warn">
+        <span class="tag">两个 Type-C 别插错</span>
+        <p>遥控器上<b>只有 U2 那个充电口</b>是开孔的，U1 模块的 Type-C 故意不开孔——两个口都通到电池，插错会拿 5V 直接怼电芯。<b>要烧录就拆壳把模块拔下来</b>，排母就是为此装的。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">24</div>
+    <div class="step-body">
+      <h3>起落杆行程与限位</h3>
+      <p>上电后手动触发一次起杆、一次落杆，确认：</p>
+      <ul>
+        <li>闸杆在 <b>0°（水平）</b> 和 <b>90°（竖直）</b> 干脆停住，不会撞机械止挡后继续憋着</li>
+        <li>停住的瞬间对应的限位开关已经动作（不是靠超时停的）</li>
+        <li>抬到竖直时，转毂配重端离上盖还有约 <b>4mm</b>，不该有摩擦声</li>
+      </ul>
+      <p>停位不对就回阶段 2 第 10 步重新调开关位置——长圆孔留了 ±1.5mm 就是为这个。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">25</div>
+    <div class="step-body">
+      <h3>语音与遥控</h3>
+      <p>三条离线命令：<b>起杆 / 落杆 / 复位</b>。遥控器两个键：<b>抬杆 / 落杆</b>。</p>
+      <div class="callout warn">
+        <span class="tag">一按遥控器就重启？</span>
+        <p>ESP-NOW 发射瞬间电流会跳到上百 mA，供电路径上串着电池引线、拨动开关、排针，都有寄生电感。先检查 C1 有没有焊好、拨动开关触点是否可靠、电池引线是不是太细太长。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 附录 ============ -->
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">附录 A</span>
+    <h2>螺丝速查</h2>
+  </div>
+  <p class="phase-note">合计 27 颗，全部是<b>自攻螺丝</b>（塑件专用 PT／PA／KA 型），不是机牙螺丝——塑件里没有预埋螺母。沉头一律 <b>90° 锥角</b>，美制 82° 会坐不平。</p>
+
+  <div class="tw">
+  <table>
+    <thead>
+      <tr><th>规格</th><th>数量</th><th>用在哪</th><th>要点</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="spec">M2×12 沉头</td><td class="spec">8</td><td>底座上盖 ×4、遥控器上盖 ×4</td><td>底座位置 <span class="mono">(±87, ±32)</span></td></tr>
+      <tr><td class="spec">M2×10 沉头</td><td class="spec">4</td><td>闸体固定到上盖</td><td><b>必须在扣盖之前拧</b>；<span class="mono">(36.5, ±15) (66.5, ±15)</span></td></tr>
+      <tr><td class="spec">M2×30 沉头</td><td class="spec">4</td><td>闸体左右壳对拧</td><td>先手扶正，斜拧必裂导向柱</td></tr>
+      <tr><td class="spec">M2×10 盘头</td><td class="spec">5</td><td>微动开关 ×4、转毂夹闸杆 ×1</td><td>夹闸杆那颗是主受力，<b>不可超 10mm</b></td></tr>
+      <tr><td class="spec">M2×8 盘头</td><td class="spec">1</td><td>凸轮顶丝</td><td><b>必须点螺纹胶</b>，从前面板 φ3 孔拧</td></tr>
+      <tr><td class="spec">M2×6 盘头</td><td class="spec">1</td><td>闸杆 A／B 对接</td><td>啮合仅 2.1mm，加一滴 502</td></tr>
+      <tr><td class="spec">M2×5 盘头</td><td class="spec">4</td><td>承载底板固定</td><td><b>不可超 5mm</b>，会顶穿地板</td></tr>
+      <tr><td class="spec">M5 六角螺母</td><td class="spec">1~2</td><td>转毂配重</td><td>碳钢镀锌，别买不锈钢</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="tag">紧固件清单 v1.3 有几处已过期</span>
+    <p>那份文档对应 CAD v3.0。以下按<b>本手册</b>为准：闸体固定点 <span class="mono">(55±15,±15)</span> → <b><span class="mono">(51.5±15,±15)</span></b>；承载底板 −X 两角 <b>不是 5×5 方缺口，是 45°×7 倒角</b>；遥控器上盖螺柱位置与高度已随外壳改版全部变更。</p>
+  </div>
+</section>
+
+<section class="phase">
+  <div class="phase-head">
+    <span class="phase-num">附录 B</span>
+    <h2>打印件</h2>
+  </div>
+
+  <div class="cards">
+    <div class="card"><h4>转毂 hub · 凸轮 cam</h4><p>建议<b>树脂或 PETG，100% 填充</b>。转毂是唯一受力件，闸杆重量和电机扭矩全从它过。</p></div>
+    <div class="card"><h4>按键帽 btn_cap ×2<br>rc_btn_cap ×2</h4><p>建议<b>树脂</b>。需要 0.3mm 级的滑动配合精度，FDM 打不出来。</p></div>
+    <div class="card"><h4>壳体 6 件</h4><p>base_tray / base_top / house_l / house_r / rc_bottom / rc_top。FDM 即可。</p></div>
+    <div class="card"><h4>闸杆 bar_a · bar_b</h4><p>分两段是为了缩短打印尺寸，装配时插榫对接。</p></div>
+  </div>
+
+  <div class="callout warn">
+    <span class="tag">打印后先清孔</span>
+    <p>所有 <code>φ1.7</code> 自攻底孔、电机隧道、<code>φ8.5</code> 轴颈孔，打完先用钻头或美工刀清一遍残留和毛刺。电机推不进去、螺丝拧不动，十有八九是毛刺不是尺寸。</p>
+    <p>螺柱外径只有 <code>φ4.4</code>（M2 自攻的下限）。若打印材料偏脆、第一次拧就沿层间裂开，把 <code>daozha.scad</code> 的 <code>BOSS_OD</code> 改成 5.0 重新导出，四周都有余量。</p>
+  </div>
+</section>
+
+<hr class="sep">
+<p class="footnote">
+  本手册对应 <code>cad/daozha.scad</code> v3.3。尺寸的唯一事实源是
+  <code>道闸玩具_元器件尺寸基准_v1.md</code>；结构约束见 <code>道闸玩具_底板机械约束_v1.md</code>。
+  若手册与代码不一致，<b>以代码和自检用例为准</b>——那 90 多条布尔自检是唯一被机器验过的部分。
+</p>
+
+</div>
+
+</body>
+</html>
