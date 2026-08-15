@@ -230,6 +230,20 @@ if (t == 68) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
 // 69: 阳性对照 —— 帽往上拔 1mm, 法兰必须被沉孔挡住 -> NON-EMPTY
 if (t == 69) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
     for (b = RC_BTN_CAP_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z + 1]) rc_btn_cap(); }
+/* ===== 抬杆到 90° 时配重端 vs 上盖 (t=93/94) =================================
+   转轴在 z=42, 配重端 HUB_ARM_X0 抬到竖直时正指向下, 落点 z = 42 + HUB_ARM_X0。
+   上盖顶面 25。原来 X0=-16 -> 落到 26, **只剩 1mm**, 打印公差 + 面板下挠就擦上了。
+   削到 -13 -> 4.0mm。
+   ⚠ 这条布尔求交只答"碰没碰上", 答不出"还剩多少"。阳性对照要把上盖垫**超过净距**
+     才碰得上 —— 第一版取 3mm, 结果 94 是 EMPTY(没碰上)。那不是失败, 恰恰证明净距
+     >3mm、和手算的 4.0 对得上; 是**对照本身标定错了**。改成 5mm。 */
+module raised_hub(a = 90) at_house() translate([0, HUB_Y_ABS, PIVOT_ABS])
+    rotate([0, -a, 0]) rotate([-90, 0, 0]) hub();
+// 93: 抬到 90° 转毂不碰上盖 -> EMPTY
+if (t == 93) intersection() { raised_hub(); translate([0, 0, TRAY_H]) base_top(); }
+// 94: 阳性对照 —— 上盖垫高 5mm 必须被配重端啃上 -> NON-EMPTY
+if (t == 94) intersection() { raised_hub(); translate([0, 0, TRAY_H + 5]) base_top(); }
+
 // 92: **复位那颗的位置必须是实心面板**(证明孔真的没开) -> NON-EMPTY
 //     少开一个孔这种"减法改动", 68 那种"帽装得进"的用例是抓不到的 ——
 //     孔没删干净它照样过。得反过来断言那儿有料。

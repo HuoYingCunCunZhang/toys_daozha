@@ -241,12 +241,16 @@ HS_L = 46;  HS_W = 46;  HS_H = 62;  HS_R = 3;
    此时闸体占 x 28.5…74.5, 离 x=20 那颗按键帽 φ12.5 沉孔的边(26.25) 还有 2.25mm。 */
 HS_X_ABS = 51.5;
 HS_ROT   = 90;    // 闸体绕 Z 的安装角。杆沿 +Y 伸出。
+ARM_ANG  = 0;     // 闸杆抬起角: 0=落杆(水平), 90=起杆(竖直)。命令行 -D ARM_ANG=90 可扫。
 
 // 闸体局部 -> 绝对: hvec 只转向量, hpt 再加平移
 function hvec(v) = [v[0]*cos(HS_ROT) - v[1]*sin(HS_ROT),
                     v[0]*sin(HS_ROT) + v[1]*cos(HS_ROT), v[2]];
 function hpt(p)  = hvec(p) + [HS_X_ABS, 0, 0];
 module at_house() translate([HS_X_ABS, 0, 0]) rotate([0, 0, HS_ROT]) children();
+// 转轴处的坐标系: 绕转轴摆 ARM_ANG 度。转毂/凸轮/闸杆都挂在这上面。
+module at_pivot() at_house() translate([0, HUB_Y_ABS, PIVOT_ABS])
+                     rotate([0, -ARM_ANG, 0]) children();
 
 // 转轴离地 42 是锁定约束(用户小车最矮 50mm, 杆顶 46 必须低于它)。
 // PIV_Z 由它反推, 这样改 BASE_H 时转轴高度自动保持不变 —— 以前写死 22,
@@ -404,7 +408,16 @@ STRIPE = 37.5;  STRIPE_D = 0.4;
    v2.2 正好写反了, 导致闸杆只能宽面(8mm)朝下躺着装。                       */
 HUB_D        = 16;                        // 毂体直径
 HUB_CLAMP_H  = 11;                        // 夹持段轴向长度 (局部 Z)
-HUB_ARM_X0   = -16;                       // 配重端
+/* 配重端。🔴 v3.3: -16 -> -13, 削掉 3mm。
+   抬杆到 90° 时配重端正指向下, 落点 z = PIVOT_ABS + HUB_ARM_X0 = 42-16 = 26,
+   而上盖顶面 BASE_H = 25 —— **只剩 1mm**, 打印公差 ±0.15 + 上盖 3mm 面板下挠,
+   起落时会擦上盖。削到 -13 后净距 4.0mm。
+   ⚠ 臂的厚度不会让它更低: 绕 Y 转 90° 时局部 x 映射到 z, 臂尖那圈点局部 x 都是
+     HUB_ARM_X0, 所以不管臂多厚落点都一样, 厚度只在 x 方向摊开。
+   ⚠ 整个 0..90 行程的最低点就在 90°(配重端画半径 |HUB_ARM_X0| 的圆弧, 指向
+     正下方时最低), 不用扫中间角度。
+   配重仓(M5 螺母)跟着往前挪, 仍从 -X 端开口, 也够不到 z=13.5 才开始的 D 形轴孔。 */
+HUB_ARM_X0   = -13;
 HUB_ARM_X1   = 20;                        // 插杆端 (插入深度 20mm, 正好吃满闸杆实心根部)
 HUB_ARM_W    = BAR_H + 2*GAP + 2*2.75;    // 夹持臂在局部 Y 上的外形 = 14
 SLOT_V       = BAR_H + 2*GAP;             // 8.5 -> 装配后竖直, 闸杆 8mm 高立起来受弯
@@ -1299,21 +1312,17 @@ module assembly() {
     ex(hvec(EX_HR),  hpt([0,  HS_W/4, BASE_H + HS_H/2]))
                        color("Goldenrod") at_house() translate([0, 0, BASE_H]) house_r();
     ex(hvec(EX_HUB), hpt([0, HUB_Y_ABS + HUB_CLAMP_H/2, PIV]))
-                       color("SlateGray")
-                           at_house() translate([0, HUB_Y_ABS, PIV])
-                           rotate([-90, 0, 0]) hub();
+                       color("SlateGray") at_pivot() rotate([-90, 0, 0]) hub();
     ex(hvec(EX_CAM), hpt([0, HUB_Y_ABS + CAM_Z0 + CAM_T/2, PIV]))
-                       color("Sienna")
-                           at_house() translate([0, HUB_Y_ABS, PIV])
+                       color("Sienna") at_pivot()
                            rotate([-90, 0, 0]) translate([0, 0, CAM_Z0]) cam();
     // 闸杆: 杆根落在转轴上, 8mm 高居中于转轴, 窄面朝下。局部沿 +X 插, 转后沿 +Y 伸出。
     ex(hvec(EX_BARA), hpt([BAR_A_BODY/2, BAR_Y_ABS, PIV]))
-                       color("Crimson")
-                           at_house() translate([0, BAR_Y_ABS, PIV - BAR_H/2]) bar_a();
+                       color("Crimson") at_pivot()
+                           translate([0, HUB_CLAMP_H/2, -BAR_H/2]) bar_a();
     ex(hvec(EX_BARB), hpt([BAR_A_BODY + BAR_B/2, BAR_Y_ABS, PIV]))
-                       color("Crimson")
-                           at_house() translate([BAR_A_BODY, BAR_Y_ABS,
-                                                 PIV - BAR_H/2]) bar_b();
+                       color("Crimson") at_pivot()
+                           translate([BAR_A_BODY, HUB_CLAMP_H/2, -BAR_H/2]) bar_b();
     color("DimGray")   translate([-150, 75, 0]) {
                            rc_bottom();
                            ex(EX_RCT, [0, 0, RC_H - RC_TOP_T/2])
