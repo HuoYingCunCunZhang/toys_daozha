@@ -497,7 +497,16 @@ RC_PSW_Y = 9.5;   RC_PSW_W = 6;   RC_PSW_Z = RC_PCB_Z + 2.2;  RC_PSW_H = 4;
    SW1 抬杆(-16,9) / SW2 落杆(2,9) / SW3 复位(20,9), 间距 18mm。
    轻触开关取 6×6×**9**: 顶杆尖 = 板面 8.7 + 9 = 17.7, 上盖背面 21 -> 让开 3.3 ✓
    盖面在 24, 差 6.3mm 够不到 -> 和主机一样配打印按键帽 rc_btn_cap。 */
-RC_BTN_POS  = [[-16, 9], [2, 9], [20, 9]];
+RC_BTN_POS  = [[-16, 9], [2, 9], [20, 9]];   // 板上三颗开关, PCB 不动
+
+/* 🔴 v3.3: 外壳**只开两个孔** —— 抬杆(-16,9) 和 落杆(2,9)。
+   三个按钮对 6~10 岁的孩子容易误操作, 用户拍板砍掉复位那颗的孔。
+   **SW3 复位开关仍焊在板上、不拆**, 只是上盖那儿变成实心面板, 手指按不到。
+   复位功能不丢: 主机的离线语音本来就有"复位"这条命令。
+   ⚠ 分成两张表是有意的 —— 开孔/按键帽只按 RC_BTN_CAP_POS 走, 而**开关本体
+     的净空必须仍按三颗全查**(自检 t=70): SW3 顶面在 8.7+9=17.7, 上盖背面 23,
+     它头顶现在是实心料, 更要确认让得开(实际余 5.3mm)。            */
+RC_BTN_CAP_POS = [RC_BTN_POS[0], RC_BTN_POS[1]];
 RC_BTN_SW_H = 9.0;
 RC_BTN_CB_D = 9.5;     // 背面沉孔 (挡帽的法兰)
 RC_BTN_CB_T = 1.5;
@@ -1116,12 +1125,12 @@ module rc_top() {
     difference() {
         union() {
             rbox(RC_L, RC_W, RC_TOP_T, RC_R);
-            // 按键帽导向凸台 (背面)
-            for (b = RC_BTN_POS) translate([rcx(b)[0], rcx(b)[1], -RC_BTN_GUIDE_H])
+            // 按键帽导向凸台 (背面)。只有开孔的那两颗有凸台
+            for (b = RC_BTN_CAP_POS) translate([rcx(b)[0], rcx(b)[1], -RC_BTN_GUIDE_H])
                 cylinder(d = RC_BTN_GUIDE_D, h = RC_BTN_GUIDE_H + 0.01);
         }
-        // 按键: 通孔 + 背面沉孔 (挡住帽的法兰, 防脱兼导向)
-        for (b = RC_BTN_POS) translate([rcx(b)[0], rcx(b)[1], 0]) {
+        // 按键: 通孔 + 背面沉孔 (挡住帽的法兰, 防脱兼导向)。**复位那颗不开孔**
+        for (b = RC_BTN_CAP_POS) translate([rcx(b)[0], rcx(b)[1], 0]) {
             translate([0, 0, -RC_BTN_GUIDE_H - 1])
                 cylinder(d = RC_BTN_CB_D, h = RC_BTN_GUIDE_H + RC_BTN_CB_T + 1);
             translate([0, 0, -RC_BTN_GUIDE_H - 2])

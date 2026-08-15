@@ -224,12 +224,21 @@ if (t == 67) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
     for (p = RC_BOSS) translate([p[0], p[1] + RC_PCB_DY, RC_H-RC_TOP_T-1])
         cylinder(d = PROBE, h = RC_TOP_T + 2); }
 // 68: 按键帽坐进上盖 (下沉 0.01 脱开法兰贴合面) -> EMPTY
+//     ⚠ 帽只有两顶(RC_BTN_CAP_POS), 复位那颗不开孔
 if (t == 68) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
-    for (b = RC_BTN_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z - 0.01]) rc_btn_cap(); }
+    for (b = RC_BTN_CAP_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z - 0.01]) rc_btn_cap(); }
 // 69: 阳性对照 —— 帽往上拔 1mm, 法兰必须被沉孔挡住 -> NON-EMPTY
 if (t == 69) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
-    for (b = RC_BTN_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z + 1]) rc_btn_cap(); }
+    for (b = RC_BTN_CAP_POS) translate([b[0], b[1] + RC_PCB_DY, RC_CAP_BOT_Z + 1]) rc_btn_cap(); }
+// 92: **复位那颗的位置必须是实心面板**(证明孔真的没开) -> NON-EMPTY
+//     少开一个孔这种"减法改动", 68 那种"帽装得进"的用例是抓不到的 ——
+//     孔没删干净它照样过。得反过来断言那儿有料。
+if (t == 92) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    translate([RC_BTN_POS[2][0], RC_BTN_POS[2][1] + RC_PCB_DY, RC_H - RC_TOP_T - 1])
+        cylinder(d = 2, h = RC_TOP_T + 2); }
 // 70: 轻触开关本体 6×6×9 vs 上盖(含导向凸台) -> EMPTY
+//     ⚠ 这条**必须仍按三颗全查**: SW3 复位虽然不开孔了, 开关还焊在板上,
+//       而且它头顶从"通孔"变成了"实心面板", 更要确认让得开(顶面 17.7, 盖背 23)。
 if (t == 70) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
     for (b = RC_BTN_POS) translate([b[0]-3, b[1]+RC_PCB_DY-3, RC_PCB_Z]) cube([6,6,RC_BTN_SW_H]); }
 // 71: 阳性对照 —— 换成 16mm 高的开关必须顶到上盖 -> NON-EMPTY
