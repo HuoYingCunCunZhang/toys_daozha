@@ -498,6 +498,17 @@ RC_CAP_BOT_Z  = RC_PCB_Z + RC_BTN_SW_H + CAP_FLOAT - CAP_BLIND_L; // 16.9
    解法是板往 -Y 加宽 3mm 做一条纯安装边, 缺口开在下面这四处。
    ⚠ 扫描判据必须按焊盘**铜箔边缘**算(中心距 ≥1.5mm), 按中心距 0.45 选出来的
      位置 DRC 直接报 Board Outline to TH Pad。                          */
+/* U2 TP4056 充电指示灯观察窗 (rc_top)。**这里用外壳坐标, 不是 PCB 坐标。**
+   位置不是量出来的, 是**从主机那颗实测值反推**的 —— 两边是同一款 28×17 模块、
+   同为 rot 0: 主机 LED 在 (-80,0)、U3 在 (-74.8,-6) => LED 相对模块中心 (-5.2,+6);
+   遥控 U2 在 PCB (-13.5,-5.5) => LED 在 PCB (-18.7,+0.5) = 外壳 (-18.7,+2.0)。
+   ⚠ 窗只有 6×4 (主机是 10×6): SW1 按键的 φ11.5 导向凸台在外壳 (-16,10.5),
+     窗放大或往 +Y 挪就会啃进凸台 —— 凸台被啃掉一块, 按键帽导向跨度变短会晃。
+     现在窗最近点 (-15.7,4) 到凸台中心距 6.51, 凸台半径 5.75 -> 让开 0.76mm。 */
+RC_LED_WIN_POS = [-18.7, 2.0];
+RC_LED_WIN_L   = 6;    // x 向
+RC_LED_WIN_W   = 4;    // y 向
+
 RC_BOSS = [[-7.5, 14.2], [11, 14.2], [-14, -17.2], [14, -17.2]];
 RC_NOTCH_W = 5;      // 板边缺口宽
 RC_NOTCH_D = 3;      // 深 (从板边往内)
@@ -1096,6 +1107,10 @@ module rc_top() {
         }
         // 角螺丝沉头孔 (这里没有止口环, 板厚就是 RC_TOP_T)
         for (p = RC_BOSS) translate([rcx(p)[0], rcx(p)[1], 0]) csk(RC_TOP_T);
+        // U2 TP4056 充电指示灯观察窗
+        translate([RC_LED_WIN_POS[0] - RC_LED_WIN_L/2,
+                   RC_LED_WIN_POS[1] - RC_LED_WIN_W/2, -1])
+            cube([RC_LED_WIN_L, RC_LED_WIN_W, RC_TOP_T + 2]);
     }
 }
 

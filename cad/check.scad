@@ -388,3 +388,18 @@ if (t == 87) intersection() { base_tray();
 if (t == 88) intersection() { motor_seat(); motor_box(); }
 // 89: 过盈量有界 —— 电机每边缩 0.2 必须脱开 -> EMPTY
 if (t == 89) intersection() { motor_seat(); motor_box(-(CRUSH_INT + 0.05)); }
+
+/* ===== 遥控器充电灯窗 vs 按键导向凸台 (t=90/91) ==============================
+   窗离 SW1 的 φ11.5 导向凸台很近, 稍微放大或往 +Y 挪就啃上去 ——
+   凸台被啃掉一块, 按键帽的导向跨度变短, 按键会晃。
+   90 测"窗没碰凸台", 91 用**用户最初给的 (-18,5)** 当阳性对照: 必须碰上,
+   否则说明这条根本没在测凸台。                                              */
+module rc_led_win(p) translate([p[0] - RC_LED_WIN_L/2, p[1] - RC_LED_WIN_W/2, -2])
+    cube([RC_LED_WIN_L, RC_LED_WIN_W, RC_TOP_T + 4]);
+module rc_btn_guide() for (b = RC_BTN_POS)
+    translate([rcx(b)[0], rcx(b)[1], -RC_BTN_GUIDE_H])
+        cylinder(d = RC_BTN_GUIDE_D, h = RC_BTN_GUIDE_H);
+// 90: 定稿位置 (-18.7, 2.0) 的窗不碰导向凸台 -> EMPTY
+if (t == 90) intersection() { rc_btn_guide(); rc_led_win(RC_LED_WIN_POS); }
+// 91: 阳性对照 —— 最初拟的 (-18, 5) 必须啃上凸台 -> NON-EMPTY
+if (t == 91) intersection() { rc_btn_guide(); rc_led_win([-18, 5]); }
