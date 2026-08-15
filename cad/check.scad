@@ -413,6 +413,38 @@ if (t == 88) intersection() { motor_seat(); motor_box(); }
 // 89: 过盈量有界 —— 电机每边缩 0.2 必须脱开 -> EMPTY
 if (t == 89) intersection() { motor_seat(); motor_box(-(CRUSH_INT + 0.05)); }
 
+/* ===== 板压条 (t=95..98) =====================================================
+   压条要同时满足三件事, 缺一条板子就压不住或者装不上:
+     95 压条底面必须**全部落在板子实体上** —— 掉到板外或掉进板边缺口就压了个空;
+     96 阳性对照: 故意把一条挪到板外, 95 那个判据必须报出来;
+     97 压条不能压在**元件**上(三颗轻触开关 + 拨动开关), 压上去就是压坏元件;
+     98 压条底面必须**真的够到板面** —— 短一截就等于没有, 而 95/97 都抓不到。 */
+module rc_hd_tips(dz = 0, shift = 0)
+    for (i = [0 : len(RC_HD) - 1]) {
+        p = RC_HD[i];
+        translate([rcx(p)[0] - p[2]/2 + (i == 0 ? shift : 0),
+                   rcx(p)[1] - RC_HD_W/2, RC_PCB_Z + dz])
+            cube([p[2], RC_HD_W, 0.4]);
+    }
+// 95: 压条底面全部落在板上 (压条 - 板 = 空) -> EMPTY
+if (t == 95) difference() { rc_hd_tips(0.05); rc_pcb_solid(0, 0.05 + 0.4); }
+// 96: 阳性对照 —— 把第一条往 -X 挪出板外, 必须露出来 -> NON-EMPTY
+//     ⚠ 挪 14mm 不够: 第一条在 x=-7.5, 挪到 -21.5 时占 x -25.5…-17.5, 而 -Y 那条
+//       安装边是**全宽**的(x ±28.5), 仍然完整落在板上 -> 对照失效。要挪 24mm。
+if (t == 96) difference() { rc_hd_tips(0.05, -24); rc_pcb_solid(0, 0.05 + 0.4); }
+// 97: 压条 vs 板上元件 (三颗 6×6×9 轻触开关 + 拨动开关本体) -> EMPTY
+if (t == 97) intersection() {
+    for (p = RC_HD) translate([rcx(p)[0] - p[2]/2, rcx(p)[1] - RC_HD_W/2, RC_PCB_Z])
+        cube([p[2], RC_HD_W, RC_HD_H]);
+    union() {
+        for (b = RC_BTN_POS)
+            translate([b[0]-3, b[1]+RC_PCB_DY-3, RC_PCB_Z]) cube([6, 6, RC_BTN_SW_H]);
+        translate([-23.1-2.2, 9.5+RC_PCB_DY-4.35, RC_PCB_Z]) cube([4.4, 8.7, 4.4]);
+    } }
+// 98: 阳性对照 —— 压条底面确实到了板面: 板面上方 0.1mm 处必须有压条料 -> NON-EMPTY
+if (t == 98) intersection() { translate([0,0,RC_H-RC_TOP_T]) rc_top();
+    rc_hd_tips(0.1); }
+
 /* ===== 遥控器充电灯窗 vs 按键导向凸台 (t=90/91) ==============================
    窗离 SW1 的 φ11.5 导向凸台很近, 稍微放大或往 +Y 挪就啃上去 ——
    凸台被啃掉一块, 按键帽的导向跨度变短, 按键会晃。
