@@ -3,3 +3,4 @@
 - [道闸玩具项目（进行中）](daozha-toy-scope.md) — 硬件全线完成到 CAD v3.3/固件骨架已建(firmware\)/下一步 M5 语音/入口看项目 README/十三条踩坑教训
 - [只验受影响的部分](verify-selectively.md) — 别烧 token 跑全流程；范围可以省，阳性对照不能省
 - [嘉立创EDA 桥接环境](easyeda-bridge-setup.md) — Claude Code 可直接操作 EDA，已跑通，含端口与陷阱
+- [长命令要先报耗时](long-commands-announce-cost.md) — 冷编译/全量自检开跑前说清多久，或放后台；沉默等于卡死
