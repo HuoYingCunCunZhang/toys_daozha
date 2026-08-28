@@ -167,7 +167,9 @@ metadata:
 
 **工具链**：装的是 **ESP-IDF v6.1-beta1**（我建议 v5.4，用户用 eim 装成了 v6.1-beta1）。框架 `D:\esp\v6.1-beta1\esp-idf`、工具 `D:\Espressif\tools`、**激活脚本 `C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1`**（不是 export.ps1）。
 
-**编译状态（2026-08-28）**：主机 ✅ **通过**，`-Wall -Wextra -Werror` 零警告，`daozha_gate.bin` ≈788KB，16MB flash / 八线 PSRAM / 自定义分区表都核过生效。遥控器 ⬜ 还没编。
+**编译状态（2026-08-28）**：主机 ✅ / 遥控器 ✅ **都通过**，`-Wall -Wextra -Werror` 零警告。`daozha_gate.bin` ≈788KB（16MB flash / 八线 PSRAM / 自定义分区表核过生效）、`daozha_remote.bin` ≈798KB。
+
+🔴 **C3 没有 RTC IO**（`SOC_RTCIO_PIN_COUNT == 0`）——`rtc_gpio_*` 在这颗芯片上根本不存在，不用也不能手工开 RTC 上拉。深睡上拉由 `ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS`（默认 y）在 `esp_deep_sleep_start()` 里按唤醒模式自动配。深睡唤醒 API 在 v6 还改了名：`esp_deep_sleep_enable_gpio_wakeup` → **`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown`**（受 `SOC_GPIO_SUPPORT_HP_PERIPH_PD_SLEEP_WAKEUP` 保护）。**芯片能力宏（`soc_caps.h`）才是这类问题的事实源，别照着别的芯片的例程抄。**
 
 **两条 REQUIRES 坑**（占了全部编译错误）：
 - **没有叫 `esp_now` 的组件** —— `esp_now.h` 一直在 `esp_wifi` 里。与 IDF 版本无关，v5.x 也一样

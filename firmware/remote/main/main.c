@@ -9,7 +9,6 @@
 #include <string.h>
 
 #include "driver/gpio.h"
-#include "driver/rtc_io.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_now.h"
@@ -164,14 +163,14 @@ static void go_sleep(void)
     esp_now_deinit();
     esp_wifi_stop();
 
-    /* 深睡期间靠 RTC 域的上拉维持高电平，按下才拉低触发唤醒。
-     * 不开 RTC 上拉的话脚是浮空的，会被噪声随机唤醒、几天就把电池耗光。 */
-    const gpio_num_t keys[] = { PIN_BTN_UP, PIN_BTN_DN, PIN_BTN_RST };
-    for (int i = 0; i < 3; i++) {
-        rtc_gpio_pullup_en(keys[i]);
-        rtc_gpio_pulldown_dis(keys[i]);
-    }
-    ESP_ERROR_CHECK(esp_deep_sleep_enable_gpio_wakeup(BTN_WAKE_MASK, ESP_GPIO_WAKEUP_GPIO_LOW));
+    /* ⚠ C3 没有 RTC IO（`SOC_RTCIO_PIN_COUNT == 0`），`rtc_gpio_*` 那套函数在这颗芯片上
+     *   根本不存在 —— 不用（也不能）手工去开 RTC 上拉。
+     *   深睡期间的上拉由 `ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS`（默认开）在
+     *   `esp_deep_sleep_start()` 里按唤醒模式自动配：低电平唤醒 -> 自动上拉。
+     *   板上也确实没有外部上拉（设计方案 §4.2：三个键统一按下接 GND，用内部上拉）。
+     *   静态不耗电，只有按下的瞬间流 3.3V/45k ≈ 73µA，对 <20µA 的深睡指标没影响。 */
+    ESP_ERROR_CHECK(esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown(
+        BTN_WAKE_MASK, ESP_GPIO_WAKEUP_GPIO_LOW));
 
     ESP_LOGI(TAG, "睡了");
     esp_deep_sleep_start();

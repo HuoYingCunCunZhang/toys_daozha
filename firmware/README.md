@@ -46,8 +46,16 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 > `set-target` 会先跑 `fullclean`，而它拒绝清理"不像 CMake 构建目录"的残留 —— 上一次
 > configure 失败留下的半成品 `build\` 就属于这种。手工 `rm -rf build` 再来。
 
-**当前编译状态**：主机 ✅ 通过（`-Wall -Wextra -Werror` 零警告，`daozha_gate.bin` 约 788KB，
-16MB flash / 八线 PSRAM / 自定义分区表全部生效）；遥控器 ⬜ **还没编过**。
+**当前编译状态**：主机 ✅ / 遥控器 ✅，都是 `-Wall -Wextra -Werror` 零警告。
+`daozha_gate.bin` ≈788KB（16MB flash / 八线 PSRAM / 自定义分区表已核过生效）、
+`daozha_remote.bin` ≈798KB。
+
+> ⚠ **C3 没有 RTC IO**（`SOC_RTCIO_PIN_COUNT == 0`）—— `rtc_gpio_*` 那套函数在这颗芯片上
+> 根本不存在，不用也不能手工去开 RTC 上拉。深睡期间的上拉由
+> `ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS`（默认开，已确认 sdkconfig 里是 `y`）
+> 在 `esp_deep_sleep_start()` 里按唤醒模式自动配。
+> 深睡唤醒 API 在 v6 也改名了：`esp_deep_sleep_enable_gpio_wakeup` →
+> **`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown`**。
 
 > 🔴 **烧遥控器之前先把拨动开关拨到关。**
 > C3 板上 Type-C 的 5V 直通 5V 脚，开关不关的话 USB 的 5V 会顺着 5V 脚倒灌回
