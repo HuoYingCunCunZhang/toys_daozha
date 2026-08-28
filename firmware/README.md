@@ -15,13 +15,22 @@
 
 ## 环境
 
-ESP-IDF **v5.4**，装在**不带空格和中文的路径**（建议 `D:\Espressif`）。
+本机装的是 **ESP-IDF v6.1-beta1**（用 eim 装的，不是 v5.4）：
+
+| | |
+|---|---|
+| 框架 | `D:\esp\v6.1-beta1\esp-idf` |
+| 工具 | `D:\Espressif\tools` |
+| 激活脚本 | `C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1` |
 
 ```powershell
-# 开始菜单里的 "ESP-IDF PowerShell" 已经把环境变量设好了；
-# 手动进环境则是：
-D:\Espressif\frameworks\esp-idf-v5.4\export.ps1
+& "C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1"
 ```
+
+> ⚠ **v6 的组件名和 v5.x 不一样**，`main/CMakeLists.txt` 的 `REQUIRES` 是按 v6 写的：
+> `driver` 元组件被拆散，gpio/ledc 要点名 **`esp_driver_gpio` / `esp_driver_ledc`**。
+> 退回 v5.x 的话这里要改回 `driver`。
+> （另一条与版本无关：**没有叫 `esp_now` 的组件**，`esp_now.h` 一直在 `esp_wifi` 里。）
 
 ## 编译烧录
 
@@ -33,6 +42,12 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 ```
 
 遥控器同理，`set-target esp32c3`，目录换 `firmware\remote`。
+
+> `set-target` 会先跑 `fullclean`，而它拒绝清理"不像 CMake 构建目录"的残留 —— 上一次
+> configure 失败留下的半成品 `build\` 就属于这种。手工 `rm -rf build` 再来。
+
+**当前编译状态**：主机 ✅ 通过（`-Wall -Wextra -Werror` 零警告，`daozha_gate.bin` 约 788KB，
+16MB flash / 八线 PSRAM / 自定义分区表全部生效）；遥控器 ⬜ **还没编过**。
 
 > 🔴 **烧遥控器之前先把拨动开关拨到关。**
 > C3 板上 Type-C 的 5V 直通 5V 脚，开关不关的话 USB 的 5V 会顺着 5V 脚倒灌回

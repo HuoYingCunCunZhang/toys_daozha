@@ -165,4 +165,12 @@ metadata:
 
 **顺手修掉两处事实源打架**（固件正好依赖）：① 方案 §4.2 正文写"取 GPIO3/4/5"，而表格和实际是 **4/3/1**（GPIO5 在符号左侧要绕线，换掉了）—— 正文已标作废；② 网表基准 §3.3 的 N16/N17 还写着对调前的 J2.2/J2.3，已按 PCB 定稿改正并补说明。
 
-**工具链**：本机原来没有 ESP-IDF 也没有 PlatformIO。定 **v5.4**，装在不带空格/中文的路径（`D:\Espressif`）。
+**工具链**：装的是 **ESP-IDF v6.1-beta1**（我建议 v5.4，用户用 eim 装成了 v6.1-beta1）。框架 `D:\esp\v6.1-beta1\esp-idf`、工具 `D:\Espressif\tools`、**激活脚本 `C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1`**（不是 export.ps1）。
+
+**编译状态（2026-08-28）**：主机 ✅ **通过**，`-Wall -Wextra -Werror` 零警告，`daozha_gate.bin` ≈788KB，16MB flash / 八线 PSRAM / 自定义分区表都核过生效。遥控器 ⬜ 还没编。
+
+**两条 REQUIRES 坑**（占了全部编译错误）：
+- **没有叫 `esp_now` 的组件** —— `esp_now.h` 一直在 `esp_wifi` 里。与 IDF 版本无关，v5.x 也一样
+- **IDF v6 把 `driver` 元组件拆散了** —— gpio/ledc/rtc_io 必须点名 `esp_driver_gpio` / `esp_driver_ledc`。退回 v5.x 要改回 `driver`
+
+⚠ `idf.py set-target` 会先跑 `fullclean`，而它**拒绝清理"不像 CMake 构建目录"的残留**（上次 configure 失败留下的半成品 `build\`）。手工删掉再来。
