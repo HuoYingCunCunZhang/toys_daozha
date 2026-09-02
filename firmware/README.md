@@ -167,10 +167,15 @@ BOOT → HOMING（慢速落杆，8s 未触限位 → FAULT）
 ## 语音（M5，`sr.c`）
 
 ```
-INMP441 --I2S0--> feed_task --> AFE(NS/VAD/AGC + WakeNet9) --> detect_task
-                                                                  |
-                                              MultiNet7 中文 --> evt_post(SRC_VOICE)
+INMP441 --I2S0--> feed_task --> AFE --> detect_task --> MultiNet7 中文 --> evt_post(SRC_VOICE)
+
+实测 AFE 流水线（上电日志里 print_pipeline 打的）：
+[input] -> |VAD(WebRTC)| -> |WakeNet(wn9_nihaoxiaozhi_tts)| -> [output]
 ```
+
+单麦 + `AFE_TYPE_SR` 就是这个形态：AEC/SE 用不上（无喇叭、无阵列），
+**非线性降噪本来就不在 SR 通路里**（`esp_afe_config.h` 对 `AFE_TYPE_SR` 的注释写死了）。
+别照着"AFE 应该有 NS/AGC"去改配置，那是 VC（语音通话）通路的形态。
 
 **两段式**：先喊唤醒词，再说命令。唤醒词用乐鑫现成模型（自定义唤醒词是付费商业服务，
 方案 §7.4），当前选的是 **你好小智**（`CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS`）。
@@ -206,6 +211,28 @@ CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 > 查不到就只是打条消息、不生成也不烧 `srmodels.bin`，固件跑起来才报"没模型"。
 
 模型占用：`mn7_cn` 2.6MB + `wn9_nihaoxiaozhi_tts` 0.3MB ≈ **2.9MB**，6MB 分区够。
+
+### 首次上电实测（2026-09-02，COM7 / 只插 DevKit）
+
+全部符合预期，逐条对上了：
+
+```
+esp_psram: Found 8MB PSRAM device          # 八线 PSRAM 认到
+cpu_start: cpu freq: 240000000 Hz          # ESP-SR 要的 240MHz 生效
+boot:  4 model  Unknown data  01 82 00810000 00600000   # model 分区 6MB
+MODEL_LOADER: Successfully load srmodels
+sr: 唤醒词模型 wn9_nihaoxiaozhi_tts（你好小智），命令词模型 mn7_cn
+AFE: AFE Pipeline: [input] -> |VAD(WebRTC)| -> |WakeNet(wn9_nihaoxiaozhi_tts,)| -> [output]
+7 active speech commands:  qi gan / tai gan / kai men / luo gan / jiang gan / guan men / fu wei
+motor: PWM 20000 Hz / 11 bit, MOTOR_INVERT=0
+E motion: FAULT: 两个限位同时到位，检查 J2 接线与 NC/NO
+comms: 主机 MAC b8:1f:3f:c3:ba:b0，信道 1，配对窗口 60s
+```
+
+- **那条 FAULT 是对的**：限位没接 + 内部上拉 = 两个都读 1 = 两个都"到位"，
+  这是物理上不可能的组合，固件按设计拒绝转电机。接上限位后应该自己消失
+- **`VBAT ≈ 3.87V` 这时候没有意义**：GPIO1 悬空，读的是浮空噪声，不是电池
+- **主机 MAC `b8:1f:3f:c3:ba:b0`** —— 遥控器配对时对这个
 
 ### 上电后先看这两行日志
 

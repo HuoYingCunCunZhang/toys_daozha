@@ -1,7 +1,11 @@
 // M5 · ESP-SR 离线语音
 //
-// 链路：INMP441 --I2S0--> feed_task --> AFE(NS/VAD/AGC + WakeNet9)
-//                                        --> detect_task --> MultiNet7(中文) --> evt_post()
+// 链路：INMP441 --I2S0--> feed_task --> AFE --> detect_task --> MultiNet7(中文) --> evt_post()
+//
+// 实测 AFE 流水线（上电时 print_pipeline 打出来的）：
+//   [input] -> |VAD(WebRTC)| -> |WakeNet(wn9_nihaoxiaozhi_tts)| -> [output]
+// 单麦 + AFE_TYPE_SR 就是这个形态：AEC/SE 用不上（无喇叭、无阵列），
+// 非线性降噪本来就不在 SR 通路里（见 esp_afe_config.h 对 AFE_TYPE_SR 的注释）。
 //
 // 唤醒词 -> 命令词 两段式：唤醒词是乐鑫现成模型（自定义唤醒词是付费服务，方案 §7.4），
 // 命令词由本文件用拼音在运行时注册，改词不用重新训练模型。
