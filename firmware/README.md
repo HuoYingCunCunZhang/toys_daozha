@@ -4,7 +4,7 @@
 
 | 目录 | 芯片 | 干什么 |
 |---|---|---|
-| `gate/` | ESP32-S3-DevKitC-1 **N16R8** | 状态机、电机、限位、按键、蜂鸣器、ESP-NOW 收、语音（M5 待做） |
+| `gate/` | ESP32-S3-DevKitC-1 **N16R8** | 状态机、电机、限位、按键、蜂鸣器、ESP-NOW 收、**语音（ESP-SR）** |
 | `remote/` | ESP32-C3 SuperMini | 按键唤醒 → 发一条 ESP-NOW → 接着深睡 |
 | `common/` | — | 12 字节 `gate_pkt_t`、CRC16、命令码。**改这里两边一起改** |
 
@@ -47,7 +47,8 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 > configure 失败留下的半成品 `build\` 就属于这种。手工 `rm -rf build` 再来。
 
 **当前编译状态**：主机 ✅ / 遥控器 ✅，都是 `-Wall -Wextra -Werror` 零警告。
-`daozha_gate.bin` ≈788KB（16MB flash / 八线 PSRAM / 自定义分区表已核过生效）、
+`daozha_gate.bin` **2.29MB**（加了 ESP-SR 之后从 788KB 涨上来的，4MB app 分区还剩 45%）、
+`srmodels.bin` **2.90MB**（烧到 0x810000 的 `model` 分区，6MB 够）、
 `daozha_remote.bin` ≈798KB。
 
 > ⚠ **C3 没有 RTC IO**（`SOC_RTCIO_PIN_COUNT == 0`）—— `rtc_gpio_*` 那套函数在这颗芯片上
@@ -76,7 +77,7 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 | 按键·抬杆 / 落杆 | 17 / 18 | N18 / N19 | 按下接 GND，内部上拉 |
 | 蜂鸣器 | 2 | N23 | → R5 → Q1(S8050) → LS1，高=响 |
 | 电池采样 | 1 | N15 | ADC1_CH0，12dB 衰减，100k/100k 分压 |
-| 麦克风 SCK/WS/SD | 4 / 5 / 6 | N20~N22 | INMP441，I2S0（M5 才用） |
+| 麦克风 SCK/WS/SD | 4 / 5 / 6 | N20~N22 | INMP441，I2S0 标准模式，16kHz/32bit/单声道 |
 
 > ⚠ **接线**：J2 第 **2** 脚接**落杆**限位、第 **3** 脚接**起杆**限位 —— PCB 布线时把
 > 原理图上这两个端口对调过（[机械约束 §七之三](../道闸玩具_底板机械约束_v1.md)），GPIO 侧不受影响。
@@ -100,12 +101,14 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 | 底座双键同时按住 3s | 复位 → 重新回零 |
 | 遥控器单键 | 抬杆 / 落杆 |
 | 遥控器抬+落同时按住 3s | 发配对广播（**主机必须在开机后 60s 内**） |
+| 喊"你好小智" → 再说"起杆/落杆/复位" | 语音控制。唤醒后蜂鸣器短鸣一声表示在听 |
 
 **单键要等松手才动作**，因为两个键不可能真正同时按下 —— 按下即动作的话，双键复位一定会先误触发一次抬杆或落杆。
 
 **配对窗口只有开机后 60s**，否则邻居家一按遥控器就能把主机抢走。配对成功蜂鸣器升调两声。
 
 蜂鸣：收到命令一短声 / 到位两声 / 防砸急促三声 / 故障连续长鸣（复位才停）。
+**唤醒应答也借用"一短声"** —— 整机没喇叭，这是唯一能告诉小孩"我在听"的通道。
 
 ---
 
@@ -156,12 +159,79 @@ BOOT → HOMING（慢速落杆，8s 未触限位 → FAULT）
 | M2 | 2 按键走完整行程，含软启动/缓停/超时/双键复位 | ✅ `motion.c` / `input.c` |
 | M3 | 标定 T，手挡闸杆能在 1.15×T 反转 | ✅ 逻辑已写，阈值待实测校 |
 | M4 | 遥控器 ESP-NOW + 配对 + 深睡 <20µA | ✅ `remote/`，深睡电流待实测 |
-| **M5** | **ESP-SR 三条命令词** | 🔴 **`gate/main/sr.c` 是桩**，接口已钉死，实现后 `main.c` 不用动 |
+| **M5** | **ESP-SR 三条命令词** | ✅ **`gate/main/sr.c` 已实现**，识别率待实测 |
 | M6/M7 | 结构装配、电池装机联调 | — 不是固件的事 |
 
-M5 落地要做的（都写在 `sr.c` 的注释里）：`idf.py add-dependency "espressif/esp-sr"`，
-I2S0 读 INMP441 → AFE → WakeNet9 唤醒 → MultiNet7 中文命令词 → `evt_post()`。
-模型烧进 `model` 分区（6MB，见 `gate/partitions.csv`）。
+---
+
+## 语音（M5，`sr.c`）
+
+```
+INMP441 --I2S0--> feed_task --> AFE(NS/VAD/AGC + WakeNet9) --> detect_task
+                                                                  |
+                                              MultiNet7 中文 --> evt_post(SRC_VOICE)
+```
+
+**两段式**：先喊唤醒词，再说命令。唤醒词用乐鑫现成模型（自定义唤醒词是付费商业服务，
+方案 §7.4），当前选的是 **你好小智**（`CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS`）。
+命令词是 **MultiNet7 中文**，**在 `sr.c` 里用拼音运行时注册**，改词不用重训模型：
+
+| id | 拼音（任一句都算） | 事件 |
+|---|---|---|
+| 1 | `qi gan` / `tai gan` / `kai men` | `EVT_CMD_OPEN` |
+| 2 | `luo gan` / `jiang gan` / `guan men` | `EVT_CMD_CLOSE` |
+| 3 | `fu wei` | `EVT_CMD_RESET` |
+
+唤醒后 5.76s 内没听到命令词就自动退回等唤醒；这几秒里 **WakeNet 是关掉的**
+（省算力，也免得命令词里的音再触发一次唤醒）。
+
+### 配置在哪
+
+模型的选择全在 `gate/sdkconfig.defaults`，**不是在代码里**：
+
+```
+CONFIG_MODEL_IN_FLASH=y                  # 模型进 flash 的 model 分区
+CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y      # 唤醒词（多选菜单，勾几个烧几个）
+CONFIG_SR_MN_CN_MULTINET7_QUANT=y        # 命令词模型
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y    # ESP-SR 要 240MHz，160 会掉帧
+CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+```
+
+> ⚠ **改了 `sdkconfig.defaults` 必须删掉 `sdkconfig` 再编**。defaults 只在
+> `sdkconfig` 里没有这一项时才生效，改 defaults 而不删 sdkconfig = 什么都没发生。
+
+> ⚠ **分区名必须叫 `model`** —— esp-sr 的 CMake 写死了去查这个名字的分区，
+> 查不到就只是打条消息、不生成也不烧 `srmodels.bin`，固件跑起来才报"没模型"。
+
+模型占用：`mn7_cn` 2.6MB + `wn9_nihaoxiaozhi_tts` 0.3MB ≈ **2.9MB**，6MB 分区够。
+
+### 上电后先看这两行日志
+
+```
+sr: 唤醒词模型 wn9_nihaoxiaozhi_tts（你好小智），命令词模型 mn7_cn
+sr: 唤醒（音量 -33.2 dBFS），请说命令
+```
+
+**`data_volume` 就是调麦克风增益的依据**：常态说话应落在 **−45 ~ −25 dBFS**。
+偏小就把 `sr.c` 的 `MIC_GAIN_SHIFT` 调小（每 −1 增益翻倍），削顶就调大。
+INMP441 是 24bit MSB 对齐塞在 32bit 槽里，`>>16` 才是数学上正确的 int16，
+现在取 **14**（多给 4× 增益），超量程做饱和截断而不是回绕。
+
+### 三个容易踩的点
+
+- **L/R 接的是 GND**（网表 N8）→ 数据在**左**声道，`slot_mask = I2S_STD_SLOT_LEFT`。
+  接反了读到的是一片 0，AFE 不报错，只是永远唤不醒
+- **槽宽必须 32bit**：INMP441 一帧要 64 个 BCLK，按 16bit 配根本收不到数
+- **不要把 `cfg->wakenet_model_name` 改成 `models` 里的指针**：那个字段是
+  `afe_config_init` 自己 strdup 的，`afe_config_free` 会去 free 它 ——
+  塞进模型表的指针进去，等于把模型表里的字符串给释放了
+
+### 任务与核
+
+`sr_feed` / `sr_detect` / AFE 内部任务全部**优先级 5、钉在 core 1**（方案 §7.2 的"独占一核"），
+core 0 留给 WiFi/ESP-NOW。语音跟其它输入一样只 `evt_post()`，不碰电机。
 
 ---
 
