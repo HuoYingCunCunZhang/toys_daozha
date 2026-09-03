@@ -25,6 +25,7 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -44,6 +45,17 @@ static const char *TAG = "sr";
  * 🔴 实测阶段调这个数：日志里 data_volume 常态应在 −45 ~ −25 dBFS。
  *    偏小就减（增益变大），削顶/识别率反而下降就加。 */
 #define MIC_GAIN_SHIFT   14
+
+/* 麦克风在 I2S 的哪个槽。INMP441 的 L/R 接 GND = 左（本项目网表 N8 就是这么接的）。
+ * 🔴 只有 5 个脚、没引出 L/R 的转接板，L/R 是在板上焊死的，多数是 GND=左，但不保证。
+ *    症状：接错槽读到的是一片 0，AFE 不报错，就是永远唤不醒 ——
+ *    这时把下面改成 I2S_STD_SLOT_RIGHT 重烧。用下面的电平日志判断，别靠猜。 */
+#define MIC_SLOT         I2S_STD_SLOT_LEFT
+
+/* 上电调试用：每 5s 报一次这段时间里的峰值电平。
+ * 定完 MIC_GAIN_SHIFT、语音跑通之后可以改 0 关掉。 */
+#define SR_LEVEL_LOG     1
+#define SR_LEVEL_LOG_MS  5000
 
 /* 唤醒后等命令词的窗口。超时自动回到"只等唤醒词"，省得一直跑 MultiNet */
 #define MN_TIMEOUT_MS    5760
@@ -106,7 +118,7 @@ static esp_err_t mic_init(void)
             .invert_flags = { .mclk_inv = false, .bclk_inv = false, .ws_inv = false },
         },
     };
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_mask = MIC_SLOT;
 
     ESP_RETURN_ON_ERROR(i2s_channel_init_std_mode(s_rx, &std_cfg), TAG, "i2s_init_std");
     ESP_RETURN_ON_ERROR(i2s_channel_enable(s_rx), TAG, "i2s_enable");
@@ -165,9 +177,25 @@ static void detect_task(void *arg)
     (void)arg;
     bool awake = false;   /* true = 正在等命令词 */
 
+#if SR_LEVEL_LOG
+    float peak = -200.0f;
+    int64_t next_report = esp_timer_get_time() + SR_LEVEL_LOG_MS * 1000LL;
+#endif
+
     for (;;) {
         afe_fetch_result_t *res = s_afe->fetch(s_afe_data);
         if (!res || res->ret_value == ESP_FAIL) continue;
+
+#if SR_LEVEL_LOG
+        if (res->data_volume > peak) peak = res->data_volume;
+        if (esp_timer_get_time() >= next_report) {
+            /* 常年 −100 上下 = 根本没数据：槽选错了、或者 J3 没接。
+             * 说话时进不到 −45 = 增益不够，把 MIC_GAIN_SHIFT 调小 */
+            ESP_LOGI(TAG, "麦克风峰值电平 %.1f dBFS（说话时应到 −45 ~ −25）", peak);
+            peak = -200.0f;
+            next_report = esp_timer_get_time() + SR_LEVEL_LOG_MS * 1000LL;
+        }
+#endif
 
         if (!awake && res->wakeup_state == WAKENET_DETECTED) {
             awake = true;
