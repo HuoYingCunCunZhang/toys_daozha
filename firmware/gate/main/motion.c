@@ -62,6 +62,15 @@ static void travel_calibrate(uint32_t ms)
         return;
     }
     uint32_t old = s_travel_ms;
+    /* 🔴 调试期的坑：行程中途用手去按限位开关，固件看来和"正常到位"一模一样，
+     * 分不出来 —— 2026-09-02 就这么把 NVS 里的 T 污染成 763ms，
+     * 而 NVS 优先于 TRAVEL_MS_DEFAULT，改缺省值根本救不回来。
+     * 不做拒绝（首次标定本来就可能大幅偏离缺省值），只把可疑样本喊出来。
+     * 真被污染了就擦 nvs 分区：esptool erase-region 0x9000 0x6000 */
+    if (ms * 10 < old * 6 || ms * 10 > old * 16) {
+        ESP_LOGW(TAG, "本次行程 %lums 与当前 T=%lums 差得远，确认不是手动按了限位",
+                 (unsigned long)ms, (unsigned long)old);
+    }
     s_travel_ms = (old * 3 + ms) / 4;   /* EMA，单次异常不会一把带偏 */
     if (s_travel_ms == old) return;
 
@@ -112,6 +121,10 @@ static void arrive(gate_state_t rest)
 {
     uint32_t ms = elapsed_ms();
     motor_stop_and_sleep();          /* 刹车 BRAKE_MS 再断电 */
+    /* 无条件打实测耗时：标定只采纳完整行程，但 HOMING、半路反转的耗时
+     * 对上电调试同样有用（定 TRAVEL_MS_DEFAULT 就靠它） */
+    ESP_LOGI(TAG, "到位 %s，本段耗时 %lums（完整行程=%d）",
+             motion_state_name(rest), (unsigned long)ms, s_from_full_travel);
     travel_calibrate(ms);
     enter(rest);
     buzzer_play(BEEP_ARRIVE);
@@ -167,7 +180,7 @@ static void step(void)
     case ST_HOMING:
         /* 位置未知，慢速往落杆方向走到限位为止 */
         if (endstop_dn()) { arrive(ST_CLOSED); break; }
-        if (ms > HOMING_TIMEOUT_MS) { go_fault("回零超时 8s 未触落位限位"); break; }
+        if (ms > HOMING_TIMEOUT_MS) { go_fault("回零超时未触落位限位（多半是凸轮相位不对，闸杆已落到底但压不到开关）"); break; }
         motor_drive(MOTOR_DOWN, DUTY_HOMING);
         break;
 

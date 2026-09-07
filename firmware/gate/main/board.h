@@ -58,13 +58,22 @@
 #define BRAKE_MS         300   /* AIN1=AIN2=高 刹车，之后拉低 nSLEEP */
 
 /* ================= 行程时间 =================
- * N20 6V 15rpm 经 5V 驱动 ≈12.5rpm，90° 约 1.4s（方案 §2）。
- * 这只是出厂缺省值，真值由前几次完整行程实测并写 NVS。*/
-#define TRAVEL_MS_DEFAULT   1400
+ * 🔴 原值 1400ms 是按「N20 6V 15rpm 经 5V 驱动 ≈12.5rpm，90° 约 1.4s」（方案 §2）算的，
+ *    2026-09-02 实测证明和实物差很远：85% 占空比跑 2.1s 才转到 45° 左右。
+ *
+ *    而且 T 偏小会连锁两层：
+ *      ENDGAME_K=85  -> 0.85T 就把占空比压到 30%，剩下的路在爬
+ *      FAULT_TIMEOUT_K=150 -> 1.5T 到点直接 FAULT 断电
+ *    结果是「还没走完就被自己的超时掐掉」，而 travel_calibrate 只采纳
+ *    「从一个限位干净跑到另一个限位」的行程 —— 走不完就永远标定不出来，死循环。
+ *
+ *    所以缺省值现在故意放宽，先让它能跑通一次完整行程、把实测 T 写进 NVS，
+ *    再按日志里的实测值把这里收紧。收紧前别当它是准确值。*/
+#define TRAVEL_MS_DEFAULT   5000
 #define TRAVEL_MS_MIN       300     /* 比这还短一定是限位误触，不许拿来标定 */
-#define TRAVEL_MS_MAX       6000
+#define TRAVEL_MS_MAX       10000   /* 标定采样的上限，比实测留足余量 */
 
-#define HOMING_TIMEOUT_MS   8000    /* 方案 §7.1：8s 未触限位 -> FAULT */
+#define HOMING_TIMEOUT_MS   20000   /* HOMING 用 45% 占空比，比正常行程慢，给够时间 */
 #define PINCH_REVERSE_K     115     /* 落杆超 1.15×T 未到位 -> 反转（防砸）*/
 #define FAULT_TIMEOUT_K     150     /* 超 1.5×T -> FAULT，断电机 */
 #define ENDGAME_K            85     /* 0.85×T 之后降速 */
