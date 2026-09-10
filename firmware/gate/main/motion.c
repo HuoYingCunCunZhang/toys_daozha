@@ -16,7 +16,7 @@ static const char *TAG = "motion";
 static const char *NVS_NS = "gate";
 static const char *NVS_KEY_T = "travel_ms";
 
-static gate_state_t s_state = ST_BOOT;
+static gate_state_t s_state = ST_UNKNOWN;
 static uint32_t s_travel_ms = TRAVEL_MS_DEFAULT;
 
 static int64_t s_move_start_us;   /* 本段运动的起点 */
@@ -25,7 +25,7 @@ static bool s_from_full_travel;   /* 起点是限位（不是半路反转）-> �
 
 const char *motion_state_name(gate_state_t s)
 {
-    static const char *N[] = { "BOOT", "HOMING", "CLOSED", "OPENING", "OPEN", "CLOSING", "FAULT" };
+    static const char *N[] = { "UNKNOWN", "CLOSED", "OPENING", "OPEN", "CLOSING", "FAULT" };
     return (s <= ST_FAULT) ? N[s] : "?";
 }
 
@@ -141,9 +141,11 @@ static void do_reset(void)
     buzzer_stop();
     motor_kill();
     s_pinched = false;
-    /* 复位一律重新回零：FAULT 之后位置不可信，
-     * 直接当 CLOSED 会让下一次抬杆从未知角度起步 */
-    start_move(ST_HOMING, false);
+    s_from_full_travel = false;
+    /* 复位 = 清故障 + 承认位置不可信，但不自己去回零。
+     * FAULT 之后位置确实不明，而「不明」正是 UNKNOWN 这个状态的含义，
+     * 用不着转电机去消除它 —— 下一条命令自然会走到某个限位。 */
+    enter(ST_UNKNOWN);
 }
 
 static void handle_cmd(const evt_t *e)
@@ -154,13 +156,17 @@ static void handle_cmd(const evt_t *e)
         do_reset();
         return;
     }
-    if (s_state == ST_FAULT || s_state == ST_BOOT || s_state == ST_HOMING) {
-        ESP_LOGW(TAG, "%s 态忽略命令 %d", motion_state_name(s_state), e->type);
+    /* 只有 FAULT 拒绝命令。UNKNOWN 两个方向都放行 —— 位置不明不是拒绝的理由，
+     * 每条命令本来就是「往这个方向走到限位为止」，不需要知道起点 */
+    if (s_state == ST_FAULT) {
+        ESP_LOGW(TAG, "FAULT 态忽略命令 %d（先复位）", e->type);
         return;
     }
 
     buzzer_play(BEEP_TICK);
 
+    /* from_limit 只在“起点确实是对面那个限位”时为真。UNKNOWN 起步一律为假 ——
+     * 起始角度不明，量到的是残段，拿去标定会把 T 越校越短 */
     if (e->type == EVT_CMD_OPEN) {
         if (s_state == ST_OPEN || s_state == ST_OPENING) return;   /* 幂等 */
         s_pinched = false;
@@ -177,13 +183,6 @@ static void step(void)
     uint32_t ms = elapsed_ms();
 
     switch (s_state) {
-    case ST_HOMING:
-        /* 位置未知，慢速往落杆方向走到限位为止 */
-        if (endstop_dn()) { arrive(ST_CLOSED); break; }
-        if (ms > HOMING_TIMEOUT_MS) { go_fault("回零超时未触落位限位（多半是凸轮相位不对，闸杆已落到底但压不到开关）"); break; }
-        motor_drive(MOTOR_DOWN, DUTY_HOMING);
-        break;
-
     case ST_OPENING:
         if (endstop_up()) {
             arrive(ST_OPEN);
@@ -210,10 +209,10 @@ static void step(void)
         motor_drive(MOTOR_DOWN, duty_profile(ms));
         break;
 
+    case ST_UNKNOWN:   /* 等命令，不动 */
     case ST_CLOSED:
     case ST_OPEN:
     case ST_FAULT:
-    case ST_BOOT:
         break;
     }
 }
@@ -224,12 +223,13 @@ static void motion_task(void *arg)
     motor_init();
 
     endstop_poll();
+    /* 这一条检的是【接线】不是【位置】：两个限位同时报“到位”物理上不可能，
+     * 只可能是接线错、或 NC 接成了 NO。留着它不影响正常上电（正常时永不触发），
+     * 而少了它的话，任何命令都会在第一个 tick 就“立刻到位”，变成静默失效。 */
     if (endstop_conflict()) {
-        /* 两个限位同时“到位”是物理上不可能的，
-         * 只可能是接线错/NC 接成 NO。这时候转电机等于拿结构去试错 */
         go_fault("两个限位同时到位，检查 J2 接线与 NC/NO");
     } else {
-        enter(ST_HOMING);
+        ESP_LOGI(TAG, "就绪。位置未知，等命令（不自动回零）");
     }
 
     for (;;) {

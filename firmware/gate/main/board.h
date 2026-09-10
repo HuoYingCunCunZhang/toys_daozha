@@ -52,7 +52,7 @@
 #define DUTY_RUN         85    /* 正常行程 */
 #define DUTY_SOFT_START  40    /* 软启动起点，200ms 线性升到 DUTY_RUN */
 #define DUTY_ENDGAME     30    /* 0.85T 之后缓停 */
-#define DUTY_HOMING      45    /* 回零慢速，位置未知不能快 */
+/* 原来还有个 DUTY_HOMING=45（回零慢速）。开机回零已取消，见 motion.h 的说明 */
 
 #define SOFT_START_MS    200
 #define BRAKE_MS         300   /* AIN1=AIN2=高 刹车，之后拉低 nSLEEP */
@@ -73,8 +73,10 @@
 #define TRAVEL_MS_MIN       300     /* 比这还短一定是限位误触，不许拿来标定 */
 #define TRAVEL_MS_MAX       10000   /* 标定采样的上限，比实测留足余量 */
 
-#define HOMING_TIMEOUT_MS   20000   /* HOMING 用 45% 占空比，比正常行程慢，给够时间 */
 #define PINCH_REVERSE_K     115     /* 落杆超 1.15×T 未到位 -> 反转（防砸）*/
+/* 🔴 落杆方向上，这是唯一一道保护 —— 机械止挡只做在抬杆侧，落杆侧没有。
+ * 落位开关卡住、或凸轮压不到时，杆子会一直往下顶满 1.5×T 才断电。
+ * 所以 T 标定完必须把 TRAVEL_MS_DEFAULT 收到实测值，别留着 5000 这个标定期的宽松值。 */
 #define FAULT_TIMEOUT_K     150     /* 超 1.5×T -> FAULT，断电机 */
 #define ENDGAME_K            85     /* 0.85×T 之后降速 */
 
