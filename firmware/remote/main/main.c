@@ -246,6 +246,12 @@ void app_main(void)
     bool up = pressed(PIN_BTN_UP);
     bool dn = pressed(PIN_BTN_DN);
     bool rst = pressed(PIN_BTN_RST);
+    /* 原始电平。内部上拉，没按应该都是 1。开机就读到 0 = 硬件把它拉低了
+     * （轻触开关焊到内部相通的那对脚上是最常见的原因） */
+    ESP_LOGI(TAG, "键电平 抬(GPIO%d)=%d 落(GPIO%d)=%d 复位(GPIO%d)=%d，0=按下",
+             PIN_BTN_UP, gpio_get_level(PIN_BTN_UP),
+             PIN_BTN_DN, gpio_get_level(PIN_BTN_DN),
+             PIN_BTN_RST, gpio_get_level(PIN_BTN_RST));
 
     if (!up && !dn && !rst) {
         /* 噪声唤醒或已松手，什么都别发 */
