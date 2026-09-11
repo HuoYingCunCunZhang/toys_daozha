@@ -46,9 +46,7 @@ void app_main(void)
 
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        ESP_LOGI(TAG, "状态=%s T=%lums VBAT=%.2fV",
-                 motion_state_name(motion_state()),
-                 (unsigned long)motion_travel_ms(),
-                 input_battery_v());
+        ESP_LOGI(TAG, "状态=%s VBAT=%.2fV",
+                 motion_state_name(motion_state()), input_battery_v());
     }
 }

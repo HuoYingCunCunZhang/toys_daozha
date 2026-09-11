@@ -10,94 +10,45 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "nvs.h"
 
 static const char *TAG = "motion";
-static const char *NVS_NS = "gate";
-static const char *NVS_KEY_T = "travel_ms";
 
-static gate_state_t s_state = ST_UNKNOWN;
-static uint32_t s_travel_ms = TRAVEL_MS_DEFAULT;
+static gate_state_t s_state = ST_IDLE;
 
-static int64_t s_move_start_us;   /* 本段运动的起点 */
-static bool s_pinched;            /* 这次抬杆是防砸反转来的，不是用户要的 */
-static bool s_from_full_travel;   /* 起点是限位（不是半路反转）-> 到位时可用于标定 */
+static bool s_timed;               /* true=定时走（语音）, false=JOG（靠保活续命） */
+static int64_t s_move_start_us;    /* 本段运动起点 */
+static int64_t s_last_jog_us;      /* 最近一次收到「还按着」 */
+static bool s_limit_was_hit;       /* 本段开始时目标方向的限位是否已经压着（压着 = 不认，等边沿） */
+static bool s_jog_locked;          /* 按满 JOG_MAX_MS 被强制停了：松手（STOP / 看门狗超时）前不再起 */
 
 const char *motion_state_name(gate_state_t s)
 {
-    static const char *N[] = { "UNKNOWN", "CLOSED", "OPENING", "OPEN", "CLOSING", "FAULT" };
+    static const char *N[] = { "IDLE", "UP", "DOWN", "FAULT" };
     return (s <= ST_FAULT) ? N[s] : "?";
 }
 
 gate_state_t motion_state(void) { return s_state; }
-uint32_t motion_travel_ms(void) { return s_travel_ms; }
 
 static uint32_t elapsed_ms(void)
 {
     return (uint32_t)((esp_timer_get_time() - s_move_start_us) / 1000);
 }
 
-/* ---------- T 的标定与持久化 ---------- */
-
-static void travel_load(void)
+/* 目标方向那颗限位现在是不是压着 */
+static bool limit_hit(gate_state_t dir)
 {
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
-    uint32_t v = 0;
-    if (nvs_get_u32(h, NVS_KEY_T, &v) == ESP_OK && v >= TRAVEL_MS_MIN && v <= TRAVEL_MS_MAX) {
-        s_travel_ms = v;
-        ESP_LOGI(TAG, "NVS 里的行程时间 T=%lums", (unsigned long)v);
-    }
-    nvs_close(h);
+    return (dir == ST_UP) ? endstop_up() : endstop_dn();
 }
 
-/* 只有“从一个限位干净地跑到另一个限位”才配当标定样本。
- * 半路反转、防砸反转、HOMING 都是不完整行程，拿来标定会把 T 越校越短，
- * 而 T 变短 = 防砸阈值变短 = 正常行程被误判成夹到东西。 */
-static void travel_calibrate(uint32_t ms)
+/* ---------- 占空比：只保留软启动 ----------
+ * 原来还有 0.85T 之后的缓停，现在没有 T，也就没有「快到了」这个概念 */
+static uint8_t duty_now(void)
 {
-    if (!s_from_full_travel) return;
-    if (ms < TRAVEL_MS_MIN || ms > TRAVEL_MS_MAX) {
-        ESP_LOGW(TAG, "行程 %lums 超出 [%d,%d]，不采纳", (unsigned long)ms, TRAVEL_MS_MIN, TRAVEL_MS_MAX);
-        return;
-    }
-    uint32_t old = s_travel_ms;
-    /* 🔴 调试期的坑：行程中途用手去按限位开关，固件看来和"正常到位"一模一样，
-     * 分不出来 —— 2026-09-02 就这么把 NVS 里的 T 污染成 763ms，
-     * 而 NVS 优先于 TRAVEL_MS_DEFAULT，改缺省值根本救不回来。
-     * 不做拒绝（首次标定本来就可能大幅偏离缺省值），只把可疑样本喊出来。
-     * 真被污染了就擦 nvs 分区：esptool erase-region 0x9000 0x6000 */
-    if (ms * 10 < old * 6 || ms * 10 > old * 16) {
-        ESP_LOGW(TAG, "本次行程 %lums 与当前 T=%lums 差得远，确认不是手动按了限位",
-                 (unsigned long)ms, (unsigned long)old);
-    }
-    s_travel_ms = (old * 3 + ms) / 4;   /* EMA，单次异常不会一把带偏 */
-    if (s_travel_ms == old) return;
-
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
-        nvs_set_u32(h, NVS_KEY_T, s_travel_ms);
-        nvs_commit(h);
-        nvs_close(h);
-    }
-    ESP_LOGI(TAG, "行程标定 %lums -> T=%lums", (unsigned long)ms, (unsigned long)s_travel_ms);
-}
-
-/* ---------- 占空比曲线 ---------- */
-
-static uint8_t duty_profile(uint32_t ms)
-{
-    /* 软启动：DUTY_SOFT_START 起，SOFT_START_MS 内线性升到 DUTY_RUN */
-    uint8_t duty = DUTY_RUN;
+    uint32_t ms = elapsed_ms();
     if (ms < SOFT_START_MS) {
-        duty = DUTY_SOFT_START + (DUTY_RUN - DUTY_SOFT_START) * ms / SOFT_START_MS;
+        return DUTY_SOFT_START + (DUTY_RUN - DUTY_SOFT_START) * ms / SOFT_START_MS;
     }
-    /* 末端缓停：0.85T 之后压到 DUTY_ENDGAME。
-     * 90° 位重力不再帮忙减速，不降速会撞 100° 的机械止挡 */
-    if (ms > s_travel_ms * ENDGAME_K / 100 && duty > DUTY_ENDGAME) {
-        duty = DUTY_ENDGAME;
-    }
-    return duty;
+    return DUTY_RUN;
 }
 
 /* ---------- 状态迁移 ---------- */
@@ -106,131 +57,135 @@ static void enter(gate_state_t st)
 {
     ESP_LOGI(TAG, "%s -> %s", motion_state_name(s_state), motion_state_name(st));
     s_state = st;
-    s_move_start_us = esp_timer_get_time();
 }
 
-static void go_fault(const char *why)
+static void stop(const char *why, bool brake)
 {
-    motor_kill();
-    ESP_LOGE(TAG, "FAULT: %s", why);
-    buzzer_play(BEEP_FAULT);
-    enter(ST_FAULT);
+    if (s_state != ST_UP && s_state != ST_DOWN) return;
+    ESP_LOGI(TAG, "停：%s（走了 %lums）", why, (unsigned long)elapsed_ms());
+    if (brake) motor_stop_and_sleep();   /* 刹车 BRAKE_MS 再断电 */
+    else       motor_kill();
+    enter(ST_IDLE);
 }
 
-static void arrive(gate_state_t rest)
+static void start_move(gate_state_t dir, bool timed)
 {
-    uint32_t ms = elapsed_ms();
-    motor_stop_and_sleep();          /* 刹车 BRAKE_MS 再断电 */
-    /* 无条件打实测耗时：标定只采纳完整行程，但 HOMING、半路反转的耗时
-     * 对上电调试同样有用（定 TRAVEL_MS_DEFAULT 就靠它） */
-    ESP_LOGI(TAG, "到位 %s，本段耗时 %lums（完整行程=%d）",
-             motion_state_name(rest), (unsigned long)ms, s_from_full_travel);
-    travel_calibrate(ms);
-    enter(rest);
-    buzzer_play(BEEP_ARRIVE);
-}
-
-static void start_move(gate_state_t moving, bool from_limit)
-{
-    s_from_full_travel = from_limit;
-    enter(moving);
+    int64_t now = esp_timer_get_time();
+    if (s_state == dir) {
+        /* 同方向：JOG 就续命；定时走就重新计时 */
+        s_last_jog_us = now;
+        if (!timed && s_timed) s_timed = false;   /* 定时走途中有人按住 -> 改由人控制 */
+        return;
+    }
+    if (s_state == ST_UP || s_state == ST_DOWN) {
+        /* 反向：先断电再起。DRV8833 扛得住瞬间反向，但没必要 */
+        motor_kill();
+    }
+    s_timed = timed;
+    s_move_start_us = now;
+    s_last_jog_us = now;
+    /* 起步时限位已经压着 -> 不认，只认之后的「没压到 -> 压到」边沿。
+     * 否则开关卡住 / NC 断线（读作“压着”）就永远动不了那个方向 —— 这正是要避免的 */
+    s_limit_was_hit = limit_hit(dir);
+    if (s_limit_was_hit) {
+        ESP_LOGW(TAG, "%s 方向限位起步时就压着，本段不认它，只认边沿", motion_state_name(dir));
+    }
+    buzzer_play(BEEP_TICK);
+    enter(dir);
 }
 
 static void do_reset(void)
 {
     buzzer_stop();
     motor_kill();
-    s_pinched = false;
-    s_from_full_travel = false;
-    /* 复位 = 清故障 + 承认位置不可信，但不自己去回零。
-     * FAULT 之后位置确实不明，而「不明」正是 UNKNOWN 这个状态的含义，
-     * 用不着转电机去消除它 —— 下一条命令自然会走到某个限位。 */
-    enter(ST_UNKNOWN);
+    enter(ST_IDLE);
 }
 
 static void handle_cmd(const evt_t *e)
 {
-    /* 复位在任何状态下都受理，其余命令 FAULT 态一律拒绝 */
-    if (e->type == EVT_CMD_RESET) {
-        ESP_LOGI(TAG, "复位（src=%d）", e->src);
+    switch (e->type) {
+    case EVT_CMD_RESET:
+        ESP_LOGI(TAG, "复位/急停（src=%d）", e->src);
         do_reset();
         return;
+
+    case EVT_STOP:
+        s_jog_locked = false;
+        stop("松手", true);
+        return;
+
+    default:
+        break;
     }
-    /* 只有 FAULT 拒绝命令。UNKNOWN 两个方向都放行 —— 位置不明不是拒绝的理由，
-     * 每条命令本来就是「往这个方向走到限位为止」，不需要知道起点 */
+
     if (s_state == ST_FAULT) {
         ESP_LOGW(TAG, "FAULT 态忽略命令 %d（先复位）", e->type);
         return;
     }
 
-    buzzer_play(BEEP_TICK);
+    if (s_jog_locked && (e->type == EVT_JOG_UP || e->type == EVT_JOG_DN)) {
+        s_last_jog_us = esp_timer_get_time();   /* 还按着：锁继续，但记着他还在按 */
+        return;
+    }
 
-    /* from_limit 只在“起点确实是对面那个限位”时为真。UNKNOWN 起步一律为假 ——
-     * 起始角度不明，量到的是残段，拿去标定会把 T 越校越短 */
-    if (e->type == EVT_CMD_OPEN) {
-        if (s_state == ST_OPEN || s_state == ST_OPENING) return;   /* 幂等 */
-        s_pinched = false;
-        start_move(ST_OPENING, s_state == ST_CLOSED);
-    } else if (e->type == EVT_CMD_CLOSE) {
-        if (s_state == ST_CLOSED || s_state == ST_CLOSING) return;
-        s_pinched = false;
-        start_move(ST_CLOSING, s_state == ST_OPEN);
+    switch (e->type) {
+    case EVT_JOG_UP:    start_move(ST_UP,   false); break;
+    case EVT_JOG_DN:    start_move(ST_DOWN, false); break;
+    case EVT_CMD_OPEN:  start_move(ST_UP,   true);  break;
+    case EVT_CMD_CLOSE: start_move(ST_DOWN, true);  break;
+    default: break;
     }
 }
 
 static void step(void)
 {
+    int64_t now = esp_timer_get_time();
+
+    /* 锁着但 JOG 也断了 = 松手了、只是 STOP 包丢了。解锁 */
+    if (s_jog_locked && now - s_last_jog_us > (int64_t)JOG_DEADMAN_MS * 1000) {
+        s_jog_locked = false;
+    }
+
+    if (s_state != ST_UP && s_state != ST_DOWN) return;
+
     uint32_t ms = elapsed_ms();
 
-    switch (s_state) {
-    case ST_OPENING:
-        if (endstop_up()) {
-            arrive(ST_OPEN);
-            if (s_pinched) { s_pinched = false; buzzer_play(BEEP_PINCH); }
-            break;
-        }
-        if (ms > s_travel_ms * FAULT_TIMEOUT_K / 100) { go_fault("抬杆超 1.5T 未到位"); break; }
-        motor_drive(MOTOR_UP, duty_profile(ms));
-        break;
-
-    case ST_CLOSING:
-        if (endstop_dn()) { arrive(ST_CLOSED); break; }
-        /* 防砸：没有电流检测，只能靠时间。先反转，还不行才 FAULT */
-        if (ms > s_travel_ms * FAULT_TIMEOUT_K / 100) { go_fault("落杆超 1.5T 未到位"); break; }
-        if (ms > s_travel_ms * PINCH_REVERSE_K / 100) {
-            ESP_LOGW(TAG, "防砸：落杆 %lums 超 1.15T(%lums)，反转",
-                     (unsigned long)ms, (unsigned long)(s_travel_ms * PINCH_REVERSE_K / 100));
-            motor_kill();
-            buzzer_play(BEEP_PINCH);
-            s_pinched = true;
-            start_move(ST_OPENING, false);   /* 反转来的行程不参与标定 */
-            break;
-        }
-        motor_drive(MOTOR_DOWN, duty_profile(ms));
-        break;
-
-    case ST_UNKNOWN:   /* 等命令，不动 */
-    case ST_CLOSED:
-    case ST_OPEN:
-    case ST_FAULT:
-        break;
+    /* ① 限位：碰到就停。只认边沿，见 start_move 的注释 */
+    bool hit = limit_hit(s_state);
+    if (hit && !s_limit_was_hit) {
+        stop("限位到位", true);
+        buzzer_play(BEEP_ARRIVE);
+        return;
     }
+    s_limit_was_hit = hit;
+
+    if (s_timed) {
+        /* ② 定时走：走满就停 */
+        if (ms >= TIMED_TRAVEL_MS) { stop("定时走完", true); return; }
+    } else {
+        /* ② 看门狗：没人续命就停。遥控器掉线、按键抖动、任务饿死都落在这里 */
+        if (now - s_last_jog_us > (int64_t)JOG_DEADMAN_MS * 1000) {
+            stop("看门狗：没人按着了", true);
+            return;
+        }
+        /* ③ 按住上限：抬杆侧有机械止挡，按住不放 = 堵转发热 */
+        if (ms >= JOG_MAX_MS) {
+            s_jog_locked = true;       /* 松手前不再起，见 handle_cmd */
+            stop("按住太久，强制停。松手再按才能继续", true);
+            buzzer_play(BEEP_PINCH);   /* 急促三声当警告用 */
+            return;
+        }
+    }
+
+    motor_drive(s_state == ST_UP ? MOTOR_UP : MOTOR_DOWN, duty_now());
 }
 
 static void motion_task(void *arg)
 {
+    (void)arg;
     endstop_init();
     motor_init();
-
-    endstop_poll();
-    /* 这一条检的是【接线】不是【位置】：两个限位同时报“到位”物理上不可能，
-     * 只可能是接线错、或 NC 接成了 NO。留着它不影响正常上电（正常时永不触发），
-     * 而少了它的话，任何命令都会在第一个 tick 就“立刻到位”，变成静默失效。 */
-    if (endstop_conflict()) {
-        go_fault("两个限位同时到位，检查 J2 接线与 NC/NO");
-    } else {
-        ESP_LOGI(TAG, "就绪。位置未知，等命令（不自动回零）");
-    }
+    ESP_LOGI(TAG, "就绪。长按走、松手停；限位只做碰到就停");
 
     for (;;) {
         evt_t e;
@@ -244,6 +199,5 @@ static void motion_task(void *arg)
 
 void motion_start(void)
 {
-    travel_load();
     xTaskCreate(motion_task, "motion", 4096, NULL, 6, NULL);
 }

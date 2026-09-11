@@ -1,8 +1,12 @@
 // 道闸玩具 · 遥控器固件（ESP32-C3 SuperMini）
 //
-// 全流程就一件事：被按键从深睡唤醒 -> 发一条 ESP-NOW -> 接着睡。
+// 全流程：被按键从深睡唤醒 -> 按着期间持续发 JOG -> 松手发 STOP -> 接着睡。
 // 不建常驻任务，醒着的时间越短越好 —— 电池只有 250mAh，
 // 而且没有电量检测（100k/100k 分压静态就 18.5µA，把深睡预算全吃了）。
+//
+// 2026-09-11 起是「长按走、松手停」（主机那边限位装不准，改由人盯着）。
+// JOG 是保活包：主机 GATE_JOG_DEADMAN_MS 内收不到下一个就自己停，
+// 所以遥控器掉线 / 走出范围 / 没电，杆子都不会一直转。
 #include "board.h"
 #include "gate_proto.h"
 
@@ -33,19 +37,33 @@ static volatile bool s_acked;
 
 /* ---------- NVS ---------- */
 
-static uint32_t seq_next(void)
+/* seq 只在醒来时读一次、睡前写一次。JOG 每 100ms 一包，要是每包都写 NVS，
+ * 一次长按就是几十次 flash 写 —— 会把 flash 写穿。
+ * 醒来先跳 SEQ_LEAP，保证就算上次没来得及写回（比如电池拔了），这次的 seq 也比上次大。 */
+#define SEQ_LEAP 1000
+static uint32_t s_seq;
+
+static void seq_load(void)
 {
-    uint32_t seq = 0;
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u32(h, NVS_KEY_SEQ, &s_seq);
+        nvs_close(h);
+    }
+    s_seq += SEQ_LEAP;
+}
+
+static void seq_save(void)
+{
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
-        nvs_get_u32(h, NVS_KEY_SEQ, &seq);
-        seq++;
-        nvs_set_u32(h, NVS_KEY_SEQ, seq);
+        nvs_set_u32(h, NVS_KEY_SEQ, s_seq);
         nvs_commit(h);
         nvs_close(h);
     }
-    return seq;
 }
+
+static uint32_t seq_next(void) { return ++s_seq; }
 
 static void gate_load(void)
 {
@@ -150,10 +168,42 @@ static void send_cmd(uint8_t cmd, bool force_broadcast)
              cmd, (unsigned long)pkt.seq, MAC2STR(dst), s_acked ? "已确认" : "无应答");
 }
 
+/* 发一包就走，不重发不等 ACK。JOG 用：丢了下一包 100ms 后就到 */
+static void send_one(uint8_t cmd)
+{
+    const uint8_t *dst = s_have_gate ? s_gate : BCAST;
+    gate_pkt_t pkt = { .cmd = cmd, .seq = seq_next(), .arg = 0 };
+    gate_pkt_seal(&pkt);
+    esp_now_send(dst, (const uint8_t *)&pkt, sizeof(pkt));
+}
+
+/* 长按走：按着就每 GATE_JOG_PERIOD_MS 发一个 JOG，松手（或另一个键也按下、或按太久）就发 STOP */
+static void jog_until_release(gpio_num_t pin, uint8_t jog_cmd)
+{
+    int64_t t0 = esp_timer_get_time();
+    int n = 0;
+    while (pressed(pin)) {
+        if (pressed(PIN_BTN_UP) && pressed(PIN_BTN_DN)) break;   /* 两个都按着 = 意图不明 */
+        if (esp_timer_get_time() - t0 > JOG_HOLD_MAX_MS * 1000LL) {
+            ESP_LOGW(TAG, "按住超过 %d ms，当卡键处理", JOG_HOLD_MAX_MS);
+            break;
+        }
+        send_one(jog_cmd);
+        n++;
+        vTaskDelay(pdMS_TO_TICKS(GATE_JOG_PERIOD_MS));
+    }
+    /* STOP 连发几次：主机有看门狗兜底，但 STOP 到得越早手感越跟手 */
+    s_acked = false;
+    send_cmd(GATE_CMD_STOP, false);
+    ESP_LOGI(TAG, "cmd=%u 共发 %d 个 JOG，按了 %lld ms", jog_cmd, n,
+             (long long)((esp_timer_get_time() - t0) / 1000));
+}
+
 /* ---------- 睡 ---------- */
 
 static void go_sleep(void)
 {
+    seq_save();
     /* 等所有键松开再睡，否则按住不放会被立刻唤醒、循环发命令 */
     int64_t t0 = esp_timer_get_time();
     while (any_pressed() && (esp_timer_get_time() - t0) < RELEASE_TIMEOUT_MS * 1000LL) {
@@ -189,6 +239,7 @@ void app_main(void)
 
     buttons_init();
     gate_load();
+    seq_load();
 
     vTaskDelay(pdMS_TO_TICKS(DEBOUNCE_MS));   /* 消抖：唤醒瞬间电平还在弹 */
 
@@ -221,8 +272,8 @@ void app_main(void)
         go_sleep();
     }
 
-    if (up)       send_cmd(GATE_CMD_OPEN, false);
-    else if (dn)  send_cmd(GATE_CMD_CLOSE, false);
+    if (up)       jog_until_release(PIN_BTN_UP, GATE_CMD_JOG_UP);
+    else if (dn)  jog_until_release(PIN_BTN_DN, GATE_CMD_JOG_DN);
     else if (rst) send_cmd(GATE_CMD_RESET, false);
 
     go_sleep();

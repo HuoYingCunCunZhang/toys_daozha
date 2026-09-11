@@ -7,19 +7,29 @@
 #include <stdint.h>
 
 #define GATE_PROTO_MAGIC   0x5A47u   /* 'ZG' */
-#define GATE_PROTO_VER     1
+#define GATE_PROTO_VER     2         /* v2：加 JOG/STOP（长按走、松手停），v1 包直接丢 */
 #define GATE_ESPNOW_CHAN   1         /* 双方固定信道 1，主机不连路由器 */
 
-/* 命令码。方案 §7.6 收敛为 OPEN/CLOSE/RESET/PING，PAIR 是配对流程用的 */
+/* 命令码。
+ * 2026-09-11 起遥控器改成「长按走、松手停」：按住时每 GATE_JOG_PERIOD_MS 发一个 JOG，
+ * 松手发 STOP。主机 GATE_JOG_DEADMAN_MS 内没收到下一个 JOG 就自己停 ——
+ * 无线断了、遥控器没电了、走出范围了，杆子都不会一直转。
+ * OPEN/CLOSE 保留为「定时走」（主机语音也用这个语义），遥控器现在不发它们。 */
 enum {
-    GATE_CMD_NONE  = 0,
-    GATE_CMD_OPEN  = 1,
-    GATE_CMD_CLOSE = 2,
-    GATE_CMD_RESET = 3,
-    GATE_CMD_ACK   = 4,   /* 主机 -> 遥控器，arg = 当前状态 gate_state_t */
-    GATE_CMD_PAIR  = 6,   /* 遥控器广播，主机仅在开机后 PAIR_WINDOW_MS 内受理 */
-    GATE_CMD_PING  = 7,
+    GATE_CMD_NONE   = 0,
+    GATE_CMD_OPEN   = 1,  /* 定时走：往上走固定时长 */
+    GATE_CMD_CLOSE  = 2,  /* 定时走：往下走固定时长 */
+    GATE_CMD_RESET  = 3,
+    GATE_CMD_ACK    = 4,  /* 主机 -> 遥控器，arg = 当前状态 gate_state_t */
+    GATE_CMD_PAIR   = 6,  /* 遥控器广播，主机仅在开机后 PAIR_WINDOW_MS 内受理 */
+    GATE_CMD_PING   = 7,
+    GATE_CMD_JOG_UP = 8,  /* 按住抬杆：保活包，收到就转 / 续命 */
+    GATE_CMD_JOG_DN = 9,  /* 按住落杆 */
+    GATE_CMD_STOP   = 10, /* 松手 */
 };
+
+#define GATE_JOG_PERIOD_MS    100   /* 遥控器按住时的发包周期 */
+#define GATE_JOG_DEADMAN_MS   300   /* 主机：这么久没收到 JOG 就停。= 容忍连丢 2 包 */
 
 typedef struct __attribute__((packed)) {
     uint16_t magic;   /* GATE_PROTO_MAGIC */

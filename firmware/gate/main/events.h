@@ -6,10 +6,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
+/* 两类输入：
+ *   JOG_*  = 「有人正按着」。谁按着谁就得持续投，motion 收不到就停（看门狗）。
+ *            底座按键 input.c 每 50ms 投一个，遥控器每 100ms 发一个，同一套机制。
+ *   CMD_*  = 「走一段」。语音用：往某个方向走固定时长（TIMED_TRAVEL_MS）。 */
 typedef enum {
-    EVT_CMD_OPEN = 0,
+    EVT_JOG_UP = 0,
+    EVT_JOG_DN,
+    EVT_STOP,        /* 松手，立即停（不等看门狗） */
+    EVT_CMD_OPEN,    /* 定时走 */
     EVT_CMD_CLOSE,
-    EVT_CMD_RESET,
+    EVT_CMD_RESET,   /* 清故障 + 急停 */
 } evt_type_t;
 
 typedef enum {

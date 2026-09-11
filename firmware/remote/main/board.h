@@ -21,7 +21,13 @@
 
 #define DEBOUNCE_MS         30
 #define PAIR_HOLD_MS      3000     /* 抬杆+落杆同时按住 3s = 发配对广播 */
-#define SEND_REPEAT          3     /* ESP-NOW 无重传，连发几次抗丢包 */
+#define SEND_REPEAT          3     /* ESP-NOW 无重传，连发几次抗丢包（RESET/PAIR/STOP 用） */
 #define SEND_GAP_MS         20
 #define ACK_WAIT_MS        250
 #define RELEASE_TIMEOUT_MS 8000    /* 键卡住时别死等，超时照样睡 */
+
+/* 长按走、松手停（2026-09-11）：
+ * 按住抬/落 -> 每 GATE_JOG_PERIOD_MS 发一个 JOG（不等 ACK）-> 松手连发 STOP -> 睡。
+ * 主机那边 GATE_JOG_DEADMAN_MS 没收到 JOG 就自己停，所以 STOP 丢了也不会跑飞。
+ * JOG_HOLD_MAX_MS 是遥控器自己的上限：按住超过它就当卡键，停发、睡觉 —— 电池只有 250mAh */
+#define JOG_HOLD_MAX_MS   6000

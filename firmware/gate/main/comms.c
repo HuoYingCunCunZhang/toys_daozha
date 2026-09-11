@@ -114,10 +114,15 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
     s_last_seq = pkt.seq;
 
     switch (pkt.cmd) {
-    case GATE_CMD_OPEN:  evt_post(EVT_CMD_OPEN,  SRC_REMOTE, 0); break;
-    case GATE_CMD_CLOSE: evt_post(EVT_CMD_CLOSE, SRC_REMOTE, 0); break;
-    case GATE_CMD_RESET: evt_post(EVT_CMD_RESET, SRC_REMOTE, 0); break;
-    case GATE_CMD_PING:  break;
+    /* 长按走、松手停：JOG 是保活包，motion 在 JOG_DEADMAN_MS 内收不到下一个就自己停 */
+    case GATE_CMD_JOG_UP: evt_post(EVT_JOG_UP, SRC_REMOTE, 0); break;
+    case GATE_CMD_JOG_DN: evt_post(EVT_JOG_DN, SRC_REMOTE, 0); break;
+    case GATE_CMD_STOP:   evt_post(EVT_STOP,   SRC_REMOTE, 0); break;
+    /* 定时走：遥控器现在不发，留给以后/调试 */
+    case GATE_CMD_OPEN:   evt_post(EVT_CMD_OPEN,  SRC_REMOTE, 0); break;
+    case GATE_CMD_CLOSE:  evt_post(EVT_CMD_CLOSE, SRC_REMOTE, 0); break;
+    case GATE_CMD_RESET:  evt_post(EVT_CMD_RESET, SRC_REMOTE, 0); break;
+    case GATE_CMD_PING:   break;
     default: return;
     }
     send_ack(src, pkt.seq);
