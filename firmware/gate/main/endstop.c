@@ -2,6 +2,7 @@
 
 #include "board.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 
 #define STABLE_TICKS  3   /* 3 × MOTION_TICK_MS = 15ms 连续一致才认 */
 
@@ -11,6 +12,8 @@ typedef struct {
     bool cand;
     uint8_t cnt;
 } sw_t;
+
+static const char *TAG = "endstop";
 
 static sw_t s_up = { .pin = PIN_LIMIT_UP };
 static sw_t s_dn = { .pin = PIN_LIMIT_DN };
@@ -35,8 +38,15 @@ void endstop_init(void)
     };
     gpio_config(&cfg);
 
-    s_up.state = s_up.cand = (gpio_get_level(PIN_LIMIT_UP) == LIMIT_ACTIVE_LEVEL);
-    s_dn.state = s_dn.cand = (gpio_get_level(PIN_LIMIT_DN) == LIMIT_ACTIVE_LEVEL);
+    int up = gpio_get_level(PIN_LIMIT_UP);
+    int dn = gpio_get_level(PIN_LIMIT_DN);
+    /* 上电原始电平。NC 接法下：未压合=0（没到位）、压到位或断线=1。
+     * 两个都是 1 -> 多半是根本没接、或接到了 NO 脚上。 */
+    ESP_LOGI(TAG, "上电读数 起杆(GPIO%d)=%d 落杆(GPIO%d)=%d，%d 表示到位",
+             PIN_LIMIT_UP, up, PIN_LIMIT_DN, dn, LIMIT_ACTIVE_LEVEL);
+
+    s_up.state = s_up.cand = (up == LIMIT_ACTIVE_LEVEL);
+    s_dn.state = s_dn.cand = (dn == LIMIT_ACTIVE_LEVEL);
 }
 
 void endstop_poll(void)

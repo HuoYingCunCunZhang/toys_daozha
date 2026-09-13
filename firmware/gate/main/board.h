@@ -51,23 +51,23 @@
 /* 占空比档位（百分比）*/
 #define DUTY_RUN         85    /* 正常行程 */
 #define DUTY_SOFT_START  40    /* 软启动起点，200ms 线性升到 DUTY_RUN */
-#define DUTY_ENDGAME     30    /* 0.85T 之后缓停 */
-#define DUTY_HOMING      45    /* 回零慢速，位置未知不能快 */
 
 #define SOFT_START_MS    200
 #define BRAKE_MS         300   /* AIN1=AIN2=高 刹车，之后拉低 nSLEEP */
 
-/* ================= 行程时间 =================
- * N20 6V 15rpm 经 5V 驱动 ≈12.5rpm，90° 约 1.4s（方案 §2）。
- * 这只是出厂缺省值，真值由前几次完整行程实测并写 NVS。*/
-#define TRAVEL_MS_DEFAULT   1400
-#define TRAVEL_MS_MIN       300     /* 比这还短一定是限位误触，不许拿来标定 */
-#define TRAVEL_MS_MAX       6000
-
-#define HOMING_TIMEOUT_MS   8000    /* 方案 §7.1：8s 未触限位 -> FAULT */
-#define PINCH_REVERSE_K     115     /* 落杆超 1.15×T 未到位 -> 反转（防砸）*/
-#define FAULT_TIMEOUT_K     150     /* 超 1.5×T -> FAULT，断电机 */
-#define ENDGAME_K            85     /* 0.85×T 之后降速 */
+/* ================= 走多久 =================
+ * 🔴 2026-09-11 起控制模型改成「长按走、松手停」：
+ *    限位开关装不到精确位置，所以它不再是动作的依据，只是「碰到就停」的加分项。
+ *    走多远由操作的人盯着，固件只兜底：
+ *      JOG_MAX_MS      —— 按住不放的上限。抬杆侧有机械止挡，按住 = 电机堵转发热
+ *      JOG_DEADMAN_MS  —— 多久没收到「还在按着」就停。底座键 50ms 投一次、遥控 100ms 发一次
+ *      TIMED_TRAVEL_MS —— 语音「起杆/落杆」没法长按，就走这么久。
+ *                         初值取自 2026-09-10 那轮标定收敛到的 T=2243ms
+ * 原来那套 T 标定 / 1.15T 防砸 / 1.5T 超时 / 0.85T 缓停 全部作废：
+ * 没有可靠限位就量不出 T，量不出 T 那些系数就没有参照物。防砸是**有意放弃**的。 */
+#define JOG_MAX_MS          5000
+#define JOG_DEADMAN_MS       300
+#define TIMED_TRAVEL_MS     2200
 
 #define MOTION_TICK_MS       5      /* 状态机轮询周期，也是限位采样周期 */
 

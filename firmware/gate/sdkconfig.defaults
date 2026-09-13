@@ -18,3 +18,21 @@ CONFIG_FREERTOS_HZ=1000
 
 # 板载 USB-JTAG 直接出日志，不用外接串口
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# ---- ESP-SR（M5 语音）----------------------------------------------------
+# 模型放 flash 的 model 分区（partitions.csv 里那 6MB），
+# esp-sr 的 CMake 认死了分区名就叫 "model"，改名字模型就不会被烧进去。
+CONFIG_MODEL_IN_FLASH=y
+
+# 唤醒词：乐鑫现成模型（自定义唤醒词是付费商业服务，方案 §7.4）。
+# 换词就改这一行 —— wakenet 那一栏是多选，勾几个就烧几个，别忘了删旧的。
+CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y
+
+# 命令词：MultiNet7 中文量化版。命令表在 main/sr.c 里运行时注册，不在这里配
+CONFIG_SR_MN_CN_MULTINET7_QUANT=y
+
+# ESP-SR 对主频和 cache 有硬要求，配不够会掉帧、识别率断崖下降
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y

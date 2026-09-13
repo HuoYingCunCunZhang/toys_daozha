@@ -18,27 +18,29 @@ static const char *TAG = "input";
 #define BAT_PERIOD_MS  10000
 
 /* ---------- 按键 ----------
- * 单键要等松手才动作：按下就动作的话，双键复位（两个键几乎不可能同时按下）
- * 一定会先误触发一次抬杆或落杆。overlap 标记记住“这次按压期间另一个键也按过”，
- * 松手时据此丢弃。 */
+ * 2026-09-11 起是「长按走、松手停」：
+ *   按住 -> 每 JOG_POST_MS 往事件队列投一个 JOG（motion 靠这个续命，断了就停）
+ *   松手 -> 立刻投一个 STOP（不等看门狗，手感更跟手）
+ *   双键同时按住 3s -> 复位/急停。双键期间不投 JOG。 */
 typedef struct {
     gpio_num_t pin;
-    evt_type_t cmd;
+    evt_type_t jog;
     bool level;       /* 已消抖：true=按下 */
     bool cand;
     uint8_t cnt;
-    bool overlap;
 } btn_t;
 
 static btn_t s_btn[2] = {
-    { .pin = PIN_BTN_UP, .cmd = EVT_CMD_OPEN },
-    { .pin = PIN_BTN_DN, .cmd = EVT_CMD_CLOSE },
+    { .pin = PIN_BTN_UP, .jog = EVT_JOG_UP },
+    { .pin = PIN_BTN_DN, .jog = EVT_JOG_DN },
 };
 
 #define STABLE_TICKS  (BTN_DEBOUNCE_MS / POLL_MS)
+#define JOG_POST_MS   50          /* 远小于 JOG_DEADMAN_MS(300)，丢几拍也不会误停 */
 
 static int64_t s_both_since_us;
 static bool s_reset_fired;
+static uint32_t s_jog_acc;
 
 static bool btn_poll(btn_t *b)   /* 返回 true 表示这一拍发生了“松手” */
 {
@@ -50,7 +52,6 @@ static bool btn_poll(btn_t *b)   /* 返回 true 表示这一拍发生了“松�
     } else if (b->level != b->cand && ++b->cnt >= STABLE_TICKS) {
         released = (b->level && !b->cand);
         b->level = b->cand;
-        if (b->level) b->overlap = false;   /* 新一次按压，重新计 */
     }
     return released;
 }
@@ -62,22 +63,38 @@ static void buttons_tick(void)
 
     bool both = s_btn[0].level && s_btn[1].level;
     if (both) {
-        s_btn[0].overlap = s_btn[1].overlap = true;
-        if (s_both_since_us == 0) s_both_since_us = esp_timer_get_time();
+        if (s_both_since_us == 0) {
+            s_both_since_us = esp_timer_get_time();
+            evt_post(EVT_STOP, SRC_BUTTON, 0);   /* 两个都按着 = 意图不明，先停 */
+        }
         if (!s_reset_fired && esp_timer_get_time() - s_both_since_us >= BTN_RESET_HOLD_MS * 1000LL) {
             ESP_LOGI(TAG, "双键长按 3s -> 复位");
             evt_post(EVT_CMD_RESET, SRC_BUTTON, 0);
             s_reset_fired = true;
         }
-    } else if (!s_btn[0].level && !s_btn[1].level) {
+        return;
+    }
+    if (!s_btn[0].level && !s_btn[1].level) {
         s_both_since_us = 0;
         s_reset_fired = false;
     }
+    if (s_reset_fired) return;   /* 复位刚触发、还有一个键没松：别把它当成新的长按 */
 
+    /* 松手：立刻停 */
+    if (rel[0] || rel[1]) {
+        evt_post(EVT_STOP, SRC_BUTTON, 0);
+        s_jog_acc = 0;
+        return;
+    }
+
+    /* 单键按着：定期续命 */
     for (int i = 0; i < 2; i++) {
-        if (rel[i] && !s_btn[i].overlap) {
-            evt_post(s_btn[i].cmd, SRC_BUTTON, 0);
+        if (!s_btn[i].level) continue;
+        if ((s_jog_acc += POLL_MS) >= JOG_POST_MS) {
+            s_jog_acc = 0;
+            evt_post(s_btn[i].jog, SRC_BUTTON, 0);
         }
+        break;
     }
 }
 
