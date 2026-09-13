@@ -1,3 +1,4 @@
 {
-    "svn.ignoreMissingSvnWarning": true
+    "svn.ignoreMissingSvnWarning": true,
+    "cmake.sourceDirectory": "D:/玩具/01.道闸门/firmware/gate"
 }

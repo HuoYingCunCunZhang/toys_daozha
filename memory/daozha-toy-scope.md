@@ -17,7 +17,12 @@ metadata:
 ## 工具环境
 
 - OpenSCAD 2021.01 在 `F:\Program Files\OpenSCAD\openscad.exe`（不在 PATH）
-- **OpenSCAD 在中文路径下无法渲染** → 工作副本放 `D:\cad\`，改完同步回 `cad\`
+- 🔴 **项目路径 `D:\玩具\01.道闸门\` 的中文会搞挂多个工具链，这是本项目的常驻税**。
+  已中招两个：**OpenSCAD 渲染不了**（工作副本 `D:\cad\`）、**ESP-IDF 的 cmake configure 直接崩**
+  （工作副本 `D:\fw\`）。IDF 那次报的是 `exit code 3221226505` = `0xC0000409`
+  STATUS_STACK_BUFFER_OVERRUN，**长得完全不像路径问题**；实锤在 `build\log\idf_py_stderr_output_*`
+  里，路径被写成 `D:\鐜╁叿\01.閬撻椄闂╘firmware`（UTF-8 当 GBK 解，且 `门` 的尾字节吞掉了 `\f`）。
+  **以后接入任何新工具链，先假设它会死在中文路径上**，用 `robocopy ... /MIR /XD build .git` 出 ASCII 副本。
 - 命令行用数字选择器 `-D p=N`，别用 `-D part="x"`（PowerShell 吞引号）
 - **写带中文的 .ps1 必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 没有 BOM 就按 ANSI 读，中文全变乱码并报语法错。补救 `(Get-Content -Raw -Encoding UTF8 $p) | Out-File $p -Encoding utf8`。.scad 无所谓（OpenSCAD 认无 BOM 的 UTF-8）
 - **PowerShell 的 `[ordered]@{}` 用整数下标取到的是"第几个"，不是键**。`$h[1]` 拿的是第 2 条。要按键取值就 `GetEnumerator()` 遍历——这个 off-by-one 让自检结果和期望值整体错了一位，差点当成真失败去改模型
@@ -128,6 +133,8 @@ metadata:
 10. **测试模型必须和真件同形**。验"板装不装得进腔里"时拿了一块**没有螺柱缺口**的方板，撞的是我自己画错的模型，不是设计缺陷。同一条还漏了 Z 向：只在 XY 缩 0.05，交集出来是零厚度薄片（那是板本该坐在承托肩上的贴合面）——**缩要三个方向一起缩**。
 11. **阳性对照要覆盖"东西根本不存在"。** 验开关底孔"没打穿外壁 / 是通的"那两条，**整块安装台不存在时照样过**——没有料求交当然是空的。补了"孔四周有料"的用例，而且**两块安装台分开验**：合成一条只要有一块在就非空了。
 12. **探针直径要配孔的类型。** φ2.0 探 M2 过孔(φ2.4)合适，探自攻底孔(φ1.7)永远探不通——那是探针选错，不是零件有毛病。
+14. 🔴 **文档里"看着像笔误"的反常值，可能正是绕坑的措施 —— 别顺手"修正"掉。** `firmware/README.md` 原来写 `cd D:\workspace_zc\toys_daozha\firmware\gate`，那路径和项目实际位置对不上，我当成写错了就改成真实的中文路径，结果**恰好把规避中文路径的办法删了**，两个工程当场编译崩溃。同一份文档上面还写着"装在不带空格和中文的路径"，是我没把两句话联系起来。**判据：改文档里任何一个"不合常理"的具体值之前，先问它为什么长这样；找不到理由就先留着并标注存疑，不要直接改。**
+
 13. **静态求交测不出装配路径，但可以换个写法测。** `t=40`：把"必须穿过 φ8.5 壁孔的那一段"减掉壁孔通道，剩下的必须为空；`t=41` 阳性对照把凸轮装回去（=一整件）必须非空。这条直接钉死了"转毂穿不过壁孔"那类问题。
 
 **另加一条方法论**（2026-08-12 用户提出，已成为项目原则）：**先定元件尺寸，再动 3D。** v2.2~v2.6 连续四轮修的硬伤根因是同一类——拿没核实的元件尺寸建模。同理，**卖家详情页的"行程"是典型值，官方规格书的 `PT Max` 才是设计依据**（这条差点让一批限位开关全部失效）。
@@ -165,9 +172,11 @@ metadata:
 
 **顺手修掉两处事实源打架**（固件正好依赖）：① 方案 §4.2 正文写"取 GPIO3/4/5"，而表格和实际是 **4/3/1**（GPIO5 在符号左侧要绕线，换掉了）—— 正文已标作废；② 网表基准 §3.3 的 N16/N17 还写着对调前的 J2.2/J2.3，已按 PCB 定稿改正并补说明。
 
-**工具链**：装的是 **ESP-IDF v6.1-beta1**（我建议 v5.4，用户用 eim 装成了 v6.1-beta1）。框架 `D:\esp\v6.1-beta1\esp-idf`、工具 `D:\Espressif\tools`、**激活脚本 `C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1`**（不是 export.ps1）。
+**工具链（2026-08-29 换机后，路径变了）**：**ESP-IDF v6.1 正式版**（不再是 beta1）。框架 `C:\esp\v6.1\esp-idf`、工具 `C:\Espressif\tools`、**激活脚本 `C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1`**（不是 export.ps1；名字里已无 `-beta1`）。当前安装登记在 `C:\Espressif\tools\eim_idf.json`。
+- **eim 的命令行模式默认按 target `all` 装**，xtensa + riscv32 两套编译器都有，不用开 GUI 勾芯片。装到一半时 `tools\` 里只有 xtensa 没有 riscv32，那只是下载顺序，不是漏装 —— **别在装完之前下"C3 编译器缺失"的结论**。
+- 换机器时 `firmware/README.md` 的环境表要重填，路径不是固定的。
 
-**编译状态（2026-08-28）**：主机 ✅ / 遥控器 ✅ **都通过**，`-Wall -Wextra -Werror` 零警告。`daozha_gate.bin` ≈788KB（16MB flash / 八线 PSRAM / 自定义分区表核过生效）、`daozha_remote.bin` ≈798KB。
+**编译状态（2026-08-29，v6.1 正式版，在 ASCII 副本 `D:\fw\` 下冷编译）**：主机 ✅ / 遥控器 ✅ **都通过**，`-Wall -Wextra -Werror` 零警告零错误。`daozha_gate.bin` **773.4KB**（16MB flash / 八线 PSRAM / 自定义分区表回读 sdkconfig 核过生效）、`daozha_remote.bin` **783.4KB**。比 beta1 各小十几 KB，是编译器版本差异。**编译必须在 `D:\fw\` 而不是仓库原地**，原因见上面工具环境那条。
 
 🔴 **C3 没有 RTC IO**（`SOC_RTCIO_PIN_COUNT == 0`）——`rtc_gpio_*` 在这颗芯片上根本不存在，不用也不能手工开 RTC 上拉。深睡上拉由 `ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS`（默认 y）在 `esp_deep_sleep_start()` 里按唤醒模式自动配。深睡唤醒 API 在 v6 还改了名：`esp_deep_sleep_enable_gpio_wakeup` → **`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown`**（受 `SOC_GPIO_SUPPORT_HP_PERIPH_PD_SLEEP_WAKEUP` 保护）。**芯片能力宏（`soc_caps.h`）才是这类问题的事实源，别照着别的芯片的例程抄。**
 

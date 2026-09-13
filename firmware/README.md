@@ -15,17 +15,21 @@
 
 ## 环境
 
-本机装的是 **ESP-IDF v6.1-beta1**（用 eim 装的，不是 v5.4）：
+装的是 **ESP-IDF v6.1**（用 eim 装的，不是 v5.4）：
 
 | | |
 |---|---|
-| 框架 | `D:\esp\v6.1-beta1\esp-idf` |
-| 工具 | `D:\Espressif\tools` |
-| 激活脚本 | `C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1` |
+| 框架 | `C:\esp\v6.1\esp-idf` |
+| 工具 | `C:\Espressif\tools` |
+| 激活脚本 | `C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1` |
 
 ```powershell
-& "C:\Espressif\tools\Microsoft.v6.1-beta1.PowerShell_profile.ps1"
+& "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
 ```
+
+> **换机器时这张表要重填**，路径不是固定的（2026-08-29 换机：`D:\esp\v6.1-beta1` → `C:\esp\v6.1`，
+> beta1 → 正式版）。eim 的**命令行模式默认按 target `all` 装**，xtensa 和 riscv32 两套编译器都有，
+> 不用开 GUI 勾芯片。当前安装的登记在 `C:\Espressif\tools\eim_idf.json`。
 
 > ⚠ **v6 的组件名和 v5.x 不一样**，`main/CMakeLists.txt` 的 `REQUIRES` 是按 v6 写的：
 > `driver` 元组件被拆散，gpio/ledc 要点名 **`esp_driver_gpio` / `esp_driver_ledc`**。
@@ -34,21 +38,49 @@
 
 ## 编译烧录
 
+### 🔴 不能在仓库原地编译 —— 项目路径有中文
+
+`D:\玩具\01.道闸门\` 里的中文会让 cmake 在 configure 阶段直接崩掉，
+**报的不是编译错误，是 `exit code 3221226505`（`0xC0000409`，STATUS_STACK_BUFFER_OVERRUN）**。
+`build\log\idf_py_stderr_output_*` 里能看到路径被拆坏的样子：
+
+```
+D:\鐜╁叿\01.閬撻椄闂╘firmware\gate     ← 本该是 D:\玩具\01.道闸门\firmware\gate
+```
+
+`玩具` 的 UTF-8 字节被按 GBK 解码，而且 `门` 的尾字节把后面的 `\f` 一起吞了。
+**和 OpenSCAD 在中文路径下渲染不了是同一类问题**（CAD 那边的对策是工作副本放 `D:\cad\`）。
+
+所以固件也走**工作副本**，仓库只存源码：
+
 ```powershell
-cd D:\workspace_zc\toys_daozha\firmware\gate
-idf.py set-target esp32s3      # 只在第一次、或换芯片时跑
+# 1. 同步到 ASCII 路径（改完源码就重跑一次；/MIR 会删掉副本里的多余文件）
+robocopy "D:\玩具\01.道闸门\firmware" "D:\fw" /MIR /XD build .git
+
+# 2. 激活环境
+& "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
+
+# 3. 编译
+cd D:\fw\gate
 idf.py build
 idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 ```
 
-遥控器同理，`set-target esp32c3`，目录换 `firmware\remote`。
+遥控器同理，目录换 `D:\fw\remote`。
 
-> `set-target` 会先跑 `fullclean`，而它拒绝清理"不像 CMake 构建目录"的残留 —— 上一次
-> configure 失败留下的半成品 `build\` 就属于这种。手工 `rm -rf build` 再来。
+> `sdkconfig.defaults` 里已经写死了 `CONFIG_IDF_TARGET`，**全新的 `build\` 不用先跑 `set-target`**，
+> 直接 `idf.py build` 就会按它选芯片。真要跑 `set-target` 的话注意它会先 `fullclean`，
+> 而 `fullclean` 拒绝清理"不像 CMake 构建目录"的残留（上次 configure 失败留下的半成品 `build\`
+> 就属于这种）—— 手工删掉再来。
 
-**当前编译状态**：主机 ✅ / 遥控器 ✅，都是 `-Wall -Wextra -Werror` 零警告。
-`daozha_gate.bin` ≈788KB（16MB flash / 八线 PSRAM / 自定义分区表已核过生效）、
-`daozha_remote.bin` ≈798KB。
+> ⚠ **改完代码记得先跑第 1 步再编译**，否则编的是旧副本。反过来，
+> **不要在 `D:\fw\` 里改代码**，`/MIR` 下次同步会直接覆盖掉。
+
+**当前编译状态**（2026-08-29，ESP-IDF v6.1 正式版，`D:\fw\` 下冷编译）：
+主机 ✅ / 遥控器 ✅，`-Wall -Wextra -Werror` 零警告零错误。
+`daozha_gate.bin` **773.4KB**（16MB flash / 八线 PSRAM / 自定义分区表已回读 `sdkconfig` 核过生效，
+app 分区 4MB 用掉 19%）、`daozha_remote.bin` **783.4KB**（1MB app 分区用掉 77%）。
+比 v6.1-beta1 时各小十几 KB，是编译器版本差异。
 
 > ⚠ **C3 没有 RTC IO**（`SOC_RTCIO_PIN_COUNT == 0`）—— `rtc_gpio_*` 那套函数在这颗芯片上
 > 根本不存在，不用也不能手工去开 RTC 上拉。深睡期间的上拉由
@@ -143,7 +175,14 @@ BOOT → HOMING（慢速落杆，8s 未触限位 → FAULT）
    按抬杆键，闸杆往下走就改成 `1` 重烧。电机引线焊反、或转毂装到另一侧都会翻转。
 2. **限位的 NC/NO 极性** —— 代码按 **NC**（未压合=闭合=读 0）写。买到 NO 的话
    `LIMIT_ACTIVE_LEVEL` 要改 `0`，否则上电就是「两个限位同时到位」→ FAULT（这时候 FAULT 是对的，它在保护结构）。
-3. **M1 铁律：必须 USB 供电。** 电池+升压的电源问题和电机逻辑问题混在一起排查会非常痛苦。
+3. **M1 供电：USB 供主控，但电机那一路必须另外喂。**
+   ⚠ 原来这条写的是"必须 USB 供电"，**不成立**（2026-08-29 改正）。看网表：
+   `U4.OUT+ →〔N5 +5V〕→ D1 →〔N6 5V_MCU〕→ U1.5V`，而 **`U2.VM` 挂在 N5**。
+   DevKit 的 USB 只能把 5V 送到 **N6**，D1 方向是 N5→N6，**反过来截止 → VM 没电、电机不转**。
+   D1 本来就是为这个存在的（电机拉低 +5V 时截止，C3 独立顶住主控），代价就是 USB 喂不到电机。
+   所以 M1 要么**电池+升压轨照常工作**（USB 只用来烧录和看日志，两路由 D1 天然隔开、不冲突），
+   要么**从外部往 N5 灌 5V**。原意"别让电源问题和电机逻辑问题混在一起"仍然对 —— 
+   办法是先把升压调准并确认稳定，不是不接它。
 
 ---
 
