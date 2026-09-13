@@ -1,6 +1,9 @@
 - [用中文回答](respond-in-chinese.md) — 用户明确要求，优先于会话里的英文配置
 - [记忆存放位置](memory-lives-in-project.md) — 正文在项目 memory\，C 盘只留索引指针
-- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 主机实机联调到按键全过、控制模型已改成长按走松手停/卡在遥控器三键全读0/入口看项目 README/踩坑清单
+- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 主机实机联调到按键全过、控制模型已改成长按走松手停/遥控器三键短路已定案(轻触开关内部脚对)待改线/入口看项目 README/踩坑清单
 - [只验受影响的部分](verify-selectively.md) — 别烧 token 跑全流程；范围可以省，阳性对照不能省
 - [嘉立创EDA 桥接环境](easyeda-bridge-setup.md) — Claude Code 可直接操作 EDA，已跑通，含端口与陷阱
 - [长命令要先报耗时](long-commands-announce-cost.md) — 冷编译/全量自检开跑前说清多久，或放后台；沉默等于卡死
+- [C3 的 DTR/RTS 复位含义](c3-usb-jtag-reset.md) — 脉冲 RTS = 按 BOOT，和 S3 那条相反；最可靠的复位是拔插 USB
+- [用内部上拉/下拉当阻抗表](gpio-pullup-pulldown-as-ohmmeter.md) — 查引脚短路别用万用表断电量通断，且必须设对照脚
+- [轻触开关内部相通的是 6.1mm 那对](tact-switch-internal-pairs.md) — 遥控器三键短路真因；封装内部导通必须实物量，EDA 永远查不出
