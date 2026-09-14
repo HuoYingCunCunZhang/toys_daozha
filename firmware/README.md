@@ -211,6 +211,20 @@ idf.py -p COM# flash monitor    # 退出 monitor 是 Ctrl+]
 
 ---
 
+## 脱离 USB 跑电池：brownout（2026-09-14，修复待验）
+
+症状：插着 USB 一切正常；拔掉主机 USB 后**主机自己的按键能转电机，遥控器一按就 MT3608 尖啸、电机不动**。
+主机开机打印的 `reset_reason=... since_poweron: resets=N brownouts=M`（计数放 RTC 内存，断 USB 不清零、
+断电池才清）抓到 **几次按键 16 次 brownout**。
+
+原因：插 USB 时主控吃 USB 5V、电机吃升压，两路分开；拔了 USB 两者合流到 MT3608 一路（经 D1）。
+两条路径电机代码相同，**差别只在射频**：主机对每个 JOG 包（100ms 一个）都回 ACK，Wi-Fi 发射峰值
+~300mA 叠在电机电流上把 +5V 拉塌。而这个 ACK 遥控器根本不等（JOG 是 fire-and-forget）。
+
+改法：`comms.c` JOG 不回 ACK + 主机发射功率压到 10dBm（`esp_wifi_set_max_tx_power(40)`）。
+**若 brownout 计数仍增长，剩下的是硬件问题**（+5V 储能不够，或主控/电机分两路供电）。
+C1 470µF / C3 220µF 已确认焊上，升压输出实测 5.07V。
+
 ## 配对与距离
 
 两边固定 **信道 1**（`GATE_ESPNOW_CHAN`），不连路由器，ESP-NOW 不加密。

@@ -125,6 +125,11 @@ static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int le
     case GATE_CMD_PING:   break;
     default: return;
     }
+    /* JOG 不回 ACK：遥控器那边是 fire-and-forget、根本不等它，而电机转着的时候每 100ms 一次
+     * 射频发射（峰值 ~300mA）叠在电机电流上，脱离 USB 只靠 MT3608 供电时会把 +5V 拉塌 ->
+     * 主控 brownout 复位（2026-09-14 实测：几次按键 16 次 brownout，MT3608 电感尖啸）。
+     * 主机自己的按键走同样的电机路径却没事，差的就是这个 ACK。 */
+    if (pkt.cmd == GATE_CMD_JOG_UP || pkt.cmd == GATE_CMD_JOG_DN) return;
     send_ack(src, pkt.seq);
 }
 
@@ -141,6 +146,9 @@ void comms_start(void)
     ESP_ERROR_CHECK(esp_wifi_start());
     /* 不连路由器，固定信道 1（方案 §7.6）。两边不一致就完全收不到 */
     ESP_ERROR_CHECK(esp_wifi_set_channel(GATE_ESPNOW_CHAN, WIFI_SECOND_CHAN_NONE));
+    /* 发射功率压到 10dBm（单位 0.25dBm）：主机只发 ACK，客厅距离用不着 20dBm，
+     * 少 100~200mA 的发射峰值，给电池供电时的 +5V 留余量（同上，防 brownout） */
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(40));
 
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_register_recv_cb(on_recv));

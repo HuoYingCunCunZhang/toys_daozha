@@ -38,7 +38,7 @@ metadata:
 - 09-10 删开机回零：回零把机械小偏差变成一开机就 FAULT；开机自转吓小孩；回零往落杆走而落杆侧无机械止挡
 - 09-11 换成**长按走、松手停**：限位只做"碰到就停"且只认边沿（起步已压着的不认，永不阻止启动）；三道兜底 = 看门狗 300ms / 按住上限 5s（加锁，松手才解）/ 限位边沿；语音起杆落杆 = 定时走 2200ms；**T 标定、防砸、超时、缓停全部作废**。遥控器改保活包（按住每 100ms 发 JOG、松手发 STOP），seq 改醒来读一次睡前写一次（原来每包写 NVS 会写穿 flash），协议版本 2。
 
-**联调踩坑**：① 光插 USB 电机绝对不转 —— VM 只来自 电池→TP4056→SW3→MT3608，D1 单向挡住 USB 反供，要 USB+拨动开关同时开；② 用户把 DRV8833 模块焊反过，VM 只有 2.3V；③ 调试时手动按限位会被当合法完整行程污染 NVS 里的 T（当时还有标定）；④ 串口复位时序 DTR 极性：`DtrEnable=$false` + 脉冲 RTS 才是正常启动，`DtrEnable=$true` 会进 download 模式卡住；⑤ 主机 CDC 口烧完常闪断一次重枚举，flash 报 COM 不存在就重试。
+**联调踩坑**：① 光插 USB 电机绝对不转 —— VM 只来自 电池→TP4056→SW3→MT3608，D1 单向挡住 USB 反供，要 USB+拨动开关同时开；② 用户把 DRV8833 模块焊反过，VM 只有 2.3V；③ 调试时手动按限位会被当合法完整行程污染 NVS 里的 T（当时还有标定）；④ 串口复位时序 DTR 极性：`DtrEnable=$false` + 脉冲 RTS 才是正常启动，`DtrEnable=$true` 会进 download 模式卡住；⑤ 主机 CDC 口烧完常闪断一次重枚举，flash 报 COM 不存在就重试；⑥ **拔掉主机 USB 跑电池时遥控器一按就 brownout**（主机按键没事）——主控和电机合流到 MT3608 一路，主机每个 JOG 回 ACK 的射频峰值把 +5V 拉塌；09-14 改成 JOG 不回 ACK + 发射 10dBm，**待电池实测**。主机开机现在打印 RTC 内存里的 brownout 计数，脱机现象事后插 USB 就能查。
 
 **ESP-SR 三个坑**：① 分区名必须叫 `model`，esp-sr 的 CMake 写死查这名字，查不到只打条消息、不烧模型也不报错；② 改 `sdkconfig.defaults` 必须删 `sdkconfig` 再编，defaults 只在 sdkconfig 缺该项时才生效；③ 别把 `cfg->wakenet_model_name` 换成 `models` 里的指针，`afe_config_free` 会去 free 它。加 ESP-SR 后 app 从 788KB 涨到 2.29MB。
 
