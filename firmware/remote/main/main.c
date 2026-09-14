@@ -34,6 +34,7 @@ static const uint8_t BCAST[ESP_NOW_ETH_ALEN] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0
 static uint8_t s_gate[ESP_NOW_ETH_ALEN];
 static bool s_have_gate;
 static volatile bool s_acked;
+static bool s_radio_up;   /* 只有走过 radio_up() 才能 deinit，否则空指针 */
 
 /* ---------- NVS ---------- */
 
@@ -135,6 +136,7 @@ static void peer_add(const uint8_t *mac)
 
 static void radio_up(void)
 {
+    s_radio_up = true;
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t wcfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -210,8 +212,12 @@ static void go_sleep(void)
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 
-    esp_now_deinit();
-    esp_wifi_stop();
+    /* "无按键/噪声唤醒"那条路没开过射频，直接 deinit 会在 wifi 库里解空指针崩掉
+     * （2026-09-14 实机：Load access fault MTVAL=0x4c，每 0.3s 重启一次） */
+    if (s_radio_up) {
+        esp_now_deinit();
+        esp_wifi_stop();
+    }
 
     /* ⚠ C3 没有 RTC IO（`SOC_RTCIO_PIN_COUNT == 0`），`rtc_gpio_*` 那套函数在这颗芯片上
      *   根本不存在 —— 不用（也不能）手工去开 RTC 上拉。

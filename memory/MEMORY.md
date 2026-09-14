@@ -7,3 +7,4 @@
 - [C3 的 DTR/RTS 复位含义](c3-usb-jtag-reset.md) — 脉冲 RTS = 按 BOOT，和 S3 那条相反；最可靠的复位是拔插 USB
 - [用内部上拉/下拉当阻抗表](gpio-pullup-pulldown-as-ohmmeter.md) — 查引脚短路别用万用表断电量通断，且必须设对照脚
 - [轻触开关内部相通的是 6.1mm 那对](tact-switch-internal-pairs.md) — 遥控器三键短路真因；封装内部导通必须实物量，EDA 永远查不出
+- [两台电脑的 IDF 环境不同](toolchain-per-machine.md) — B 机 beta1 在 D:\esp、仓库 ASCII 路径可原地编译；A 机正式版在 C:\esp 要 robocopy

@@ -345,9 +345,14 @@ core 0 留给 WiFi/ESP-NOW。语音跟其它输入一样只 `evt_post()`，不�
 
 ---
 
-## 代码里两个不显眼的坑
+## 代码里三个不显眼的坑
 
 - **限位模块叫 `endstop.h` 不叫 `limits.h`** —— `main/` 在 include path 上，
   叫 `limits.h` 会盖掉 C 标准库的 `<limits.h>`，报错点会离现场很远。
 - **只有 `motion.c` 能调 `motor_*`**（方案 §7.2 的规矩）。其它任务一律 `evt_post()`，
   否则语音和遥控会抢电机。
+- **遥控器 `go_sleep()` 只有走过 `radio_up()` 才能 `esp_now_deinit()`/`esp_wifi_stop()`**。
+  "醒来发现没键按着"那条路不开射频就直接睡，此时 deinit 会在 wifi 库里解空指针
+  （`Load access fault` MTVAL=0x4c）→ 每 0.3s 重启一次、永远睡不下去、电池被抽干。
+  三键短路那阵子每次醒来都有键"按着"，必走 `radio_up()`，所以这个 bug 藏到开关修好（2026-09-14）才露头。
+  现在用 `s_radio_up` 标志挡着。
