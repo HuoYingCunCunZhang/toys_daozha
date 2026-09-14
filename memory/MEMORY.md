@@ -1,6 +1,6 @@
 - [用中文回答](respond-in-chinese.md) — 用户明确要求，优先于会话里的英文配置
 - [记忆存放位置](memory-lives-in-project.md) — 正文在项目 memory\，C 盘只留索引指针
-- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 主机实机联调到按键全过、控制模型已改成长按走松手停/遥控器三键短路已定案(轻触开关内部脚对)待改线/入口看项目 README/踩坑清单
+- [道闸玩具项目（进行中）](daozha-toy-scope.md) — 主机实机联调到按键全过、控制模型已改成长按走松手停/遥控器三键改线完成、联机实测通过(2026-09-14)/入口看项目 README/踩坑清单
 - [只验受影响的部分](verify-selectively.md) — 别烧 token 跑全流程；范围可以省，阳性对照不能省
 - [嘉立创EDA 桥接环境](easyeda-bridge-setup.md) — Claude Code 可直接操作 EDA，已跑通，含端口与陷阱
 - [长命令要先报耗时](long-commands-announce-cost.md) — 冷编译/全量自检开跑前说清多久，或放后台；沉默等于卡死
